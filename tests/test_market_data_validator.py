@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from tradingagents.dataflows.symbol_utils import NoMarketDataError
 import tradingagents.dataflows.market_data_validator as validator
 
 
@@ -47,12 +48,12 @@ class TestVerifiedSnapshot:
 
     def test_raises_when_no_rows_on_or_before_date(self, monkeypatch):
         monkeypatch.setattr(validator, "load_ohlcv", lambda s, d: _sample_ohlcv())
-        with pytest.raises(ValueError):
+        with pytest.raises(NoMarketDataError):
             validator.build_verified_market_snapshot("COF", "2020-01-01")
 
     def test_raises_on_empty_data(self, monkeypatch):
         monkeypatch.setattr(validator, "load_ohlcv", lambda s, d: pd.DataFrame())
-        with pytest.raises(ValueError):
+        with pytest.raises(NoMarketDataError):
             validator.build_verified_market_snapshot("COF", "2026-05-13")
 
     def test_look_back_window_capped_at_30(self, monkeypatch):
@@ -74,3 +75,32 @@ class TestTool:
             {"symbol": "COF", "curr_date": "2026-05-20"}
         )
         assert "Verified market data snapshot for COF" in out
+
+    def test_tool_uses_configured_vendor_fallback(self, monkeypatch):
+        import copy
+
+        import tradingagents.default_config as default_config
+        import tradingagents.dataflows.config as config_module
+        from tradingagents.agents.utils.market_data_validation_tools import (
+            get_verified_market_snapshot,
+        )
+        from tradingagents.dataflows import interface
+        from tradingagents.dataflows.config import set_config
+
+        monkeypatch.setattr(config_module, "_config", copy.deepcopy(default_config.DEFAULT_CONFIG))
+        set_config({"data_vendors": {"core_stock_apis": "yfinance,alpha_vantage"}})
+
+        def no_data(symbol, *args, **kwargs):
+            raise NoMarketDataError(symbol, symbol, "测试无数据")
+
+        monkeypatch.setitem(
+            interface.VENDOR_METHODS,
+            "get_verified_market_snapshot",
+            {"yfinance": no_data, "alpha_vantage": lambda *args, **kwargs: "ALPHA 快照"},
+        )
+
+        out = get_verified_market_snapshot.invoke(
+            {"symbol": "COF", "curr_date": "2026-05-20"}
+        )
+
+        assert out == "ALPHA 快照"

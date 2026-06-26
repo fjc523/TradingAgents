@@ -59,3 +59,36 @@ def test_load_ohlcv_requests_inclusive_end(monkeypatch, tmp_path):
 
     expected_end = (pd.Timestamp.today() + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     assert captured["end"] == expected_end  # tomorrow -> today's row included (#986)
+
+
+@pytest.mark.unit
+def test_load_ohlcv_refreshes_recent_cached_rows(monkeypatch, tmp_path):
+    set_config({"data_cache_dir": str(tmp_path)})
+    today = pd.Timestamp.today()
+    requested_day = (today - pd.Timedelta(days=1)).normalize()
+    start_str = (today - pd.DateOffset(years=5)).strftime("%Y-%m-%d")
+    end_str = (today + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    cache_file = tmp_path / f"AAPL-YFin-data-{start_str}-{end_str}.csv"
+    pd.DataFrame({
+        "Date": [requested_day],
+        "Open": [1.0],
+        "High": [1.0],
+        "Low": [1.0],
+        "Close": [1.0],
+        "Volume": [1],
+    }).to_csv(cache_file, index=False)
+    calls = {"count": 0}
+
+    def fake_download(symbol, start, end, **kwargs):
+        calls["count"] += 1
+        return pd.DataFrame(
+            {"Open": [2.0], "High": [2.0], "Low": [2.0], "Close": [2.0], "Volume": [2]},
+            index=pd.to_datetime([requested_day]),
+        )
+
+    monkeypatch.setattr(su.yf, "download", fake_download)
+
+    data = su.load_ohlcv("AAPL", requested_day.strftime("%Y-%m-%d"))
+
+    assert calls["count"] == 1
+    assert data.iloc[-1]["Close"] == 2.0

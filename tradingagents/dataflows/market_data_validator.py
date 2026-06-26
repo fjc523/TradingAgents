@@ -11,10 +11,14 @@ claim. Deterministic, no LLM involved.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import datetime
+from io import StringIO
 
 import pandas as pd
 from stockstats import wrap
 
+from tradingagents.dataflows.alpha_vantage_stock import get_stock as get_alpha_vantage_stock
+from tradingagents.dataflows.symbol_utils import NoMarketDataError, normalize_symbol
 from tradingagents.dataflows.stockstats_utils import load_ohlcv
 
 # A fixed, common indicator set so the snapshot is the same shape every run.
@@ -25,24 +29,44 @@ DEFAULT_SNAPSHOT_INDICATORS: tuple[str, ...] = (
 )
 
 
-def _verified_rows(symbol: str, curr_date: str) -> pd.DataFrame:
-    """OHLCV on or before curr_date, date-sorted. Raises if nothing usable.
-
-    ``load_ohlcv`` already normalizes the Date column and filters out
-    look-ahead rows, but we re-apply the cutoff defensively — this is a
-    verification path, so it must not trust its input to be pre-filtered.
-    """
-    data = load_ohlcv(symbol, curr_date)
+def _verified_rows_from_frame(symbol: str, curr_date: str, data: pd.DataFrame) -> pd.DataFrame:
+    """从给定 OHLCV 表中取 curr_date 当日或之前的可验证行。"""
     if data is None or data.empty:
-        raise ValueError(f"No OHLCV data available for {symbol}.")
+        raise NoMarketDataError(symbol, normalize_symbol(symbol), f"no OHLCV rows on or before {curr_date}")
 
-    df = data.copy()
+    df = _normalize_ohlcv_frame(data)
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
     df = df.dropna(subset=["Date"])
     df = df[df["Date"] <= pd.to_datetime(curr_date)].sort_values("Date")
     if df.empty:
-        raise ValueError(f"No OHLCV rows on or before {curr_date} for {symbol}.")
+        raise NoMarketDataError(symbol, normalize_symbol(symbol), f"no OHLCV rows on or before {curr_date}")
     return df
+
+
+def _verified_rows(symbol: str, curr_date: str) -> pd.DataFrame:
+    """使用 yfinance OHLCV 缓存生成可验证行。"""
+    return _verified_rows_from_frame(symbol, curr_date, load_ohlcv(symbol, curr_date))
+
+
+def _normalize_ohlcv_frame(data: pd.DataFrame) -> pd.DataFrame:
+    columns = {str(col).lower().strip(): col for col in data.columns}
+    date_col = columns.get("date") or columns.get("timestamp") or data.columns[0]
+    field_map = {
+        "Date": date_col,
+        "Open": columns.get("open"),
+        "High": columns.get("high"),
+        "Low": columns.get("low"),
+        "Close": columns.get("close"),
+        "Volume": columns.get("volume"),
+    }
+    missing = [target for target, source in field_map.items() if source is None]
+    if missing:
+        raise ValueError(f"OHLCV 数据缺少字段：{', '.join(missing)}")
+    normalized = data[[source for source in field_map.values()]].copy()
+    normalized.columns = list(field_map.keys())
+    for col in ("Open", "High", "Low", "Close", "Volume"):
+        normalized[col] = pd.to_numeric(normalized[col], errors="coerce")
+    return normalized.dropna(subset=["Close"])
 
 
 def _fmt(value) -> str:
@@ -66,10 +90,46 @@ def build_verified_market_snapshot(
     indicators: Iterable[str] | None = None,
 ) -> str:
     """Render a ground-truth snapshot: latest OHLCV row, indicators, recent closes."""
+    return build_verified_market_snapshot_from_ohlcv(
+        symbol,
+        curr_date,
+        _verified_rows(symbol, curr_date),
+        look_back_days,
+        indicators,
+    )
+
+
+def build_verified_market_snapshot_alpha_vantage(
+    symbol: str,
+    curr_date: str,
+    look_back_days: int = 30,
+    indicators: Iterable[str] | None = None,
+) -> str:
+    """使用 Alpha Vantage 日线数据生成验证快照，供 vendor router 备用。"""
+    curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
+    start_date = (pd.Timestamp(curr_date_dt) - pd.DateOffset(years=5)).strftime("%Y-%m-%d")
+    csv_text = get_alpha_vantage_stock(symbol, start_date, curr_date)
+    data = pd.read_csv(StringIO(csv_text))
+    return build_verified_market_snapshot_from_ohlcv(
+        symbol,
+        curr_date,
+        _verified_rows_from_frame(symbol, curr_date, data),
+        look_back_days,
+        indicators,
+    )
+
+
+def build_verified_market_snapshot_from_ohlcv(
+    symbol: str,
+    curr_date: str,
+    df: pd.DataFrame,
+    look_back_days: int = 30,
+    indicators: Iterable[str] | None = None,
+) -> str:
+    """基于已经解析好的 OHLCV 表渲染确定性验证快照。"""
     # `df` keeps the original capitalized OHLCV columns (Open/High/Low/Close/
     # Volume); stockstats `wrap()` lowercases columns and adds indicator
     # columns, so read raw prices from `df` and indicators from `stock_df`.
-    df = _verified_rows(symbol, curr_date)
     stock_df = wrap(df.copy())
 
     selected = tuple(indicators or DEFAULT_SNAPSHOT_INDICATORS)

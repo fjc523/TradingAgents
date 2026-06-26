@@ -122,6 +122,13 @@ def _assert_ohlcv_not_stale(
         )
 
 
+def _should_refresh_recent_ohlcv(curr_date_dt: pd.Timestamp, today_date: pd.Timestamp) -> bool:
+    """最近交易日可能含盘中临时日 K，读取缓存前强制刷新。"""
+    current_day = today_date.normalize()
+    requested_day = curr_date_dt.normalize()
+    return requested_day >= current_day - pd.Timedelta(days=1)
+
+
 def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     """Fetch OHLCV data with caching, filtered to prevent look-ahead bias.
 
@@ -157,7 +164,7 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     # transient rate limit). Treat an empty/columnless cache as a miss and
     # re-fetch rather than serving the poisoned file forever.
     data = None
-    if os.path.exists(data_file):
+    if os.path.exists(data_file) and not _should_refresh_recent_ohlcv(curr_date_dt, today_date):
         cached = pd.read_csv(data_file, on_bad_lines="skip", encoding="utf-8")
         if not cached.empty and "Close" in cached.columns:
             data = cached
