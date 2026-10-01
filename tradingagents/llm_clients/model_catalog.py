@@ -221,6 +221,8 @@ MODEL_OPTIONS: ProviderModeOptions = {
     "nvidia": _CUSTOM_ONLY,
     # Bedrock model IDs / cross-region inference profile IDs are user-specified.
     "bedrock": _CUSTOM_ONLY,
+    # The local Codex CLI accepts model IDs supported by the active account.
+    "codex_exec": _CUSTOM_ONLY,
 }
 
 

@@ -30,6 +30,10 @@ def create_llm_client(
     """
     provider_lower = provider.lower()
 
+    if provider_lower == "codex_exec":
+        from .codex_exec import CodexExecClient
+        return CodexExecClient(model, base_url, **kwargs)
+
     # Native (non-OpenAI) APIs are matched first so their string check doesn't
     # import the OpenAI client. Everything else is OpenAI-compatible and routes
     # through the provider registry (single source of truth).
@@ -87,7 +91,7 @@ def _coerce_max_tokens(value):
     return n
 
 
-def build_llm_kwargs(config: dict) -> dict[str, Any]:
+def build_llm_kwargs(config: dict, role: str | None = None) -> dict[str, Any]:
     """Keyword arguments for ``create_llm_client`` from a TradingAgents config."""
     kwargs = {}
     provider = config.get("llm_provider", "").lower()
@@ -106,6 +110,23 @@ def build_llm_kwargs(config: dict) -> dict[str, Any]:
         effort = config.get("anthropic_effort")
         if effort:
             kwargs["effort"] = effort
+
+    elif provider == "codex_exec":
+        role_effort = config.get(f"codex_{role}_reasoning_effort") if role else None
+        kwargs["reasoning_effort"] = (
+            role_effort or config.get("codex_reasoning_effort") or "high"
+        )
+        kwargs["role"] = role
+        for config_key, kwarg in (
+            ("codex_binary", "codex_binary"),
+            ("codex_timeout", "codex_timeout"),
+            ("codex_retries", "codex_retries"),
+            ("codex_max_concurrency", "codex_max_concurrency"),
+            ("codex_usage_log_path", "codex_usage_log_path"),
+            ("codex_prompt_log_dir", "codex_prompt_log_dir"),
+        ):
+            if config.get(config_key) is not None:
+                kwargs[kwarg] = config[config_key]
 
     # Sampling temperature is cross-provider: forward it whenever set.
     # float() here so a value coming from a TRADINGAGENTS_TEMPERATURE env

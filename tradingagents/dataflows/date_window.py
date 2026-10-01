@@ -25,15 +25,41 @@ def in_window(pub_dt: datetime | None, start_dt: datetime, end_dt: datetime) -> 
 
     ``pub_dt`` None means undated: kept only when the window reaches the present.
     """
-    end = to_utc(end_dt)
+    end = to_utc(end_dt) + timedelta(days=1)
+    # 配置截止时刻后，无法证明发布时间的条目不进入点时回放。
+    from tradingagents.dataflows.config import get_config
+    cutoff = get_config().get("news_cutoff_utc")
+    if cutoff:
+        cutoff_dt = datetime.fromisoformat(str(cutoff).replace("Z", "+00:00"))
+        end = min(end, to_utc(cutoff_dt))
     if pub_dt is not None:
-        return to_utc(start_dt) <= to_utc(pub_dt) < end + timedelta(days=1)
-    return end >= datetime.now(UTC) - timedelta(days=1)
+        return to_utc(start_dt) <= to_utc(pub_dt) < end
+    if cutoff:
+        return False
+    return to_utc(end_dt) >= datetime.now(UTC) - timedelta(days=1)
 
 
 def get_current_date() -> str:
     """Today's date, YYYY-MM-DD."""
+    from tradingagents.dataflows.config import get_config
+    timezone = get_config().get("market_timezone")
+    if timezone:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo(timezone)).date().isoformat()
     return date.today().strftime("%Y-%m-%d")
+
+
+def price_data_end_date(trade_date: str | None) -> str | None:
+    """把价格数据的可选截止日应用到图运行日期。"""
+    if not trade_date:
+        return trade_date
+    from tradingagents.dataflows.config import get_config
+    configured = get_config().get("price_data_end_date")
+    if not configured:
+        return trade_date
+    if _parse(str(configured)) is None:
+        raise ValueError(f"price_data_end_date 必须为 YYYY-MM-DD，当前值：{configured!r}")
+    return min(trade_date, str(configured))
 
 
 def is_historical(run_date) -> bool:

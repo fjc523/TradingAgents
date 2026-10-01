@@ -27,6 +27,19 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_GOOGLE_THINKING_LEVEL":   "google_thinking_level",
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
+    "TRADINGAGENTS_CODEX_REASONING_EFFORT": "codex_reasoning_effort",
+    "TRADINGAGENTS_CODEX_DEEP_REASONING_EFFORT": "codex_deep_reasoning_effort",
+    "TRADINGAGENTS_CODEX_QUICK_REASONING_EFFORT": "codex_quick_reasoning_effort",
+    "TRADINGAGENTS_CODEX_BINARY": "codex_binary",
+    "TRADINGAGENTS_CODEX_TIMEOUT": "codex_timeout",
+    "TRADINGAGENTS_CODEX_RETRIES": "codex_retries",
+    "TRADINGAGENTS_CODEX_MAX_CONCURRENCY": "codex_max_concurrency",
+    "TRADINGAGENTS_CODEX_USAGE_LOG_PATH": "codex_usage_log_path",
+    "TRADINGAGENTS_CODEX_PROMPT_LOG_DIR": "codex_prompt_log_dir",
+    "TRADINGAGENTS_MARKET_TIMEZONE": "market_timezone",
+    "TRADINGAGENTS_PRICE_DATA_END_DATE": "price_data_end_date",
+    "TRADINGAGENTS_NEWS_CUTOFF_UTC": "news_cutoff_utc",
+    "TRADINGAGENTS_ALPACA_REQUESTS_PER_MINUTE": "alpaca_requests_per_minute",
 }
 
 
@@ -98,6 +111,21 @@ def build_default_config() -> dict:
         "google_thinking_level": None,      # "high", "minimal", etc.
         "openai_reasoning_effort": None,    # "medium", "high", "low"
         "anthropic_effort": None,           # "high", "medium", "low"
+        # 本机 Codex CLI 后端；None 的路径项保持不启用日志。
+        "codex_reasoning_effort": None,
+        "codex_deep_reasoning_effort": None,
+        "codex_quick_reasoning_effort": None,
+        "codex_binary": "codex",
+        "codex_timeout": 600,
+        "codex_retries": 3,
+        "codex_max_concurrency": 4,
+        "codex_usage_log_path": None,
+        "codex_prompt_log_dir": None,
+        # 点时约束与共享 Alpaca 限流。
+        "market_timezone": None,
+        "price_data_end_date": None,
+        "news_cutoff_utc": None,
+        "alpaca_requests_per_minute": 180,
         # Sampling temperature, forwarded to every provider when set. None leaves
         # each provider at its own default. Lower values reduce run-to-run
         # variation on models that honor it; reasoning models largely ignore it

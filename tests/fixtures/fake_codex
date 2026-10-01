@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""离线 codex exec 替身，仅供测试，不读取用户认证信息。"""
+
+import json
+import os
+import pathlib
+import sys
+import time
+
+args = sys.argv[1:]
+argv_log = os.environ.get("FAKE_CODEX_ARGV_LOG")
+if argv_log:
+    with open(argv_log, "a", encoding="utf-8") as stream:
+        stream.write(json.dumps(args) + "\n")
+cwd_log = os.environ.get("FAKE_CODEX_CWD_LOG")
+if cwd_log:
+    pathlib.Path(cwd_log).write_text(json.dumps(os.listdir(os.getcwd())), encoding="utf-8")
+prompt = sys.stdin.read()
+prompt_log = os.environ.get("FAKE_CODEX_PROMPT_LOG")
+if prompt_log:
+    pathlib.Path(prompt_log).write_text(prompt, encoding="utf-8")
+started = os.environ.get("FAKE_CODEX_STARTED")
+if started:
+    pathlib.Path(started).touch()
+delay = float(os.environ.get("FAKE_CODEX_SLEEP", "0"))
+if delay:
+    time.sleep(delay)
+
+def sequence(name, default):
+    values = os.environ.get(name, "")
+    return values.split(",") if values else [default]
+
+attempt = 0
+if argv_log and pathlib.Path(argv_log).exists():
+    attempt = len(pathlib.Path(argv_log).read_text(encoding="utf-8").splitlines()) - 1
+exit_sequence = os.environ.get("FAKE_CODEX_EXIT_SEQUENCE")
+exit_code = int(
+    exit_sequence.split(",")[min(attempt, len(exit_sequence.split(",")) - 1)]
+    if exit_sequence else os.environ.get("FAKE_CODEX_EXIT", "0")
+)
+stderr_sequence = os.environ.get("FAKE_CODEX_STDERR_SEQUENCE")
+stderr_values = stderr_sequence.split(",") if stderr_sequence else [os.environ.get("FAKE_CODEX_STDERR", "")]
+stderr = stderr_values[min(attempt, len(stderr_values) - 1)]
+if stderr:
+    print(stderr, file=sys.stderr)
+stdout = os.environ.get("FAKE_CODEX_STDOUT", "")
+if stdout:
+    print(stdout)
+if exit_code == 0:
+    output_path = pathlib.Path(args[args.index("-o") + 1])
+    output = os.environ.get("FAKE_CODEX_OUTPUT", '{"content":"offline response"}')
+    output_path.write_text(output, encoding="utf-8")
+sys.exit(exit_code)

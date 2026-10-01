@@ -9,7 +9,7 @@ from typing import Annotated
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 
-from tradingagents.dataflows.date_window import as_of, as_of_window
+from tradingagents.dataflows.date_window import as_of, as_of_window, price_data_end_date
 from tradingagents.dataflows.errors import NoMarketDataError, VendorUnavailableError
 from tradingagents.dataflows.router import no_data_available, route_to_vendor, vendor_unavailable
 from tradingagents.dataflows.vendors.yahoo.snapshot import build_verified_market_snapshot
@@ -31,7 +31,7 @@ def get_stock_data(
     Returns:
         str: A formatted dataframe containing the price data for the instrument over the date range.
     """
-    start_date, end_date = as_of_window(start_date, end_date, trade_date)
+    start_date, end_date = as_of_window(start_date, end_date, price_data_end_date(trade_date))
     return route_to_vendor("get_stock_data", symbol, start_date, end_date)
 
 
@@ -55,7 +55,7 @@ def get_indicators(
     """
     # LLMs sometimes pass multiple indicators as a comma-separated string;
     # split and process each individually.
-    curr_date = as_of(curr_date, trade_date)
+    curr_date = as_of(curr_date, price_data_end_date(trade_date))
     indicators = [i.strip().lower() for i in indicator.split(",") if i.strip()]
     results = []
     for ind in indicators:
@@ -84,7 +84,9 @@ def get_verified_market_snapshot(
     """
     # An exception out of a tool would end the run.
     try:
-        return build_verified_market_snapshot(symbol, as_of(curr_date, trade_date), look_back_days)
+        return build_verified_market_snapshot(
+            symbol, as_of(curr_date, price_data_end_date(trade_date)), look_back_days
+        )
     except VendorUnavailableError as exc:
         return vendor_unavailable("get_verified_market_snapshot", exc)
     except NoMarketDataError as exc:

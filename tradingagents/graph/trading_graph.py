@@ -45,6 +45,7 @@ def _validate_trade_date(trade_date) -> str:
 # whether it checkpoints, and how often it retries a provider.
 _NOT_IN_SIGNATURE = frozenset({
     "results_dir", "data_cache_dir", "memory_log_path", "checkpoint_enabled", "llm_max_retries",
+    "codex_binary", "codex_usage_log_path", "codex_prompt_log_dir",
 })
 
 
@@ -75,22 +76,24 @@ class TradingAgentsGraph:
         os.makedirs(self.config["data_cache_dir"], exist_ok=True)
         os.makedirs(self.config["results_dir"], exist_ok=True)
 
-        llm_kwargs = build_llm_kwargs(self.config)
+        deep_kwargs = build_llm_kwargs(self.config, role="deep")
+        quick_kwargs = build_llm_kwargs(self.config, role="quick")
 
         if self.callbacks:
-            llm_kwargs["callbacks"] = self.callbacks
+            deep_kwargs["callbacks"] = self.callbacks
+            quick_kwargs["callbacks"] = self.callbacks
 
         deep_client = create_llm_client(
             provider=self.config["llm_provider"],
             model=self.config["deep_think_llm"],
             base_url=self.config.get("backend_url"),
-            **llm_kwargs,
+            **deep_kwargs,
         )
         quick_client = create_llm_client(
             provider=self.config["llm_provider"],
             model=self.config["quick_think_llm"],
             base_url=self.config.get("backend_url"),
-            **llm_kwargs,
+            **quick_kwargs,
         )
 
         self.deep_thinking_llm = deep_client.get_llm()

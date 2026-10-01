@@ -41,6 +41,8 @@ PROVIDER_API_KEY_ENV: dict[str, str | None] = {
     # relays), but it is marked key-optional in the provider registry so the CLI
     # never forces a prompt and keyless local servers still work.
     "openai_compatible": "OPENAI_COMPATIBLE_API_KEY",
+    # Codex CLI reuses its own user login and never accepts a project key.
+    "codex_exec": None,
 }
 
 
