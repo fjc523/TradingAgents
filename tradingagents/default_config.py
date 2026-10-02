@@ -154,6 +154,8 @@ def build_default_config() -> dict:
         # Debate and discussion settings
         "max_debate_rounds": 1,
         "max_risk_discuss_rounds": 1,
+        # StockTwits 公共接口可能被 Cloudflare 拦截；部署方可关闭预取，关闭后不发请求。
+        "stocktwits_enabled": True,
         "max_recur_limit": 100,
         # Rounds of tool calls an analyst may make before it is asked for its report.
         "max_tool_rounds": 20,

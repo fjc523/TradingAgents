@@ -50,6 +50,8 @@ def observed_call(method, vendor, impl, *args, observation_symbol=None, **kwargs
         outcome = "no_data"
     else:
         outcome = "success"
+    # 占位文本本身说明了失败原因（如 HTTP 状态码），直接透传；只有空值才写泛化原因。
+    reason = None if outcome == "success" else (text.strip()[:200] or "没有可用数据")
     report_vendor(method, vendor, outcome, duration=perf_counter()-started,
-                  error="没有可用数据" if outcome != "success" else None, symbol=observation_symbol)
+                  error=reason, symbol=observation_symbol)
     return value

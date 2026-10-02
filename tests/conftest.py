@@ -76,6 +76,15 @@ def _no_network(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_reddit_pacing(monkeypatch):
+    """Reddit 请求限速只在真实运行中生效；限速本身由专门的测试注入时钟验证。"""
+    from tradingagents.dataflows.vendors import reddit
+
+    monkeypatch.setattr(reddit, "_MIN_INTERVAL_SECONDS", 0.0)
+    monkeypatch.setattr(reddit, "_last_request_at", None)
+
+
+@pytest.fixture(autouse=True)
 def _at_a_terminal(monkeypatch):
     """Tests of the interactive steps run as if at a terminal; pytest's stdin is
     not one. A test of an unattended run sets isatty to False itself."""

@@ -21,6 +21,7 @@ import http.client
 import logging
 import random
 import re
+import threading
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
@@ -128,6 +129,33 @@ def _strip_html(content: str) -> str:
 _RETRY_FALLBACK_SECONDS = 60.0
 
 
+# 匿名 RSS 每个 IP 约每分钟 1 次：同一进程内的请求按时间串行，
+# 与上一次请求至少间隔该秒数（只向上抖动）；429 退避后的重试不再额外等待。
+_MIN_INTERVAL_SECONDS = 60.0
+_PACE_LOCK = threading.Lock()
+_last_request_at: float | None = None
+_clock = time.monotonic
+_pace_sleep = time.sleep
+
+
+def _pace() -> None:
+    """等待到距上一次请求满间隔后占用发送时刻；持锁等待使并行标的依次发送。"""
+    global _last_request_at
+    with _PACE_LOCK:
+        if _last_request_at is not None and _MIN_INTERVAL_SECONDS > 0:
+            wait = _last_request_at + _MIN_INTERVAL_SECONDS * (1.0 + random.uniform(0, 0.2)) - _clock()
+            if wait > 0:
+                logger.info("Reddit RSS pacing: waiting %.1fs before the next request", wait)
+                _pace_sleep(wait)
+        _last_request_at = _clock()
+
+
+def _mark_request() -> None:
+    global _last_request_at
+    with _PACE_LOCK:
+        _last_request_at = _clock()
+
+
 def _jitter(seconds: float, frac: float = 0.2) -> float:
     """Return ``seconds`` with +/-``frac`` random jitter, to desynchronize
     concurrent runs pacing against the same per-IP limit."""
@@ -174,6 +202,7 @@ def _fetch_subreddit_rss(
     limit: int,
     timeout: float,
     _retry: bool = True,
+    errors: list[str] | None = None,
 ) -> list[dict] | None:
     """Default path: parse the public Atom search feed for a subreddit.
 
@@ -188,6 +217,10 @@ def _fetch_subreddit_rss(
     """
     url = _RSS.format(sub=sub, qs=_search_qs(ticker, limit))
     req = Request(url, headers={"User-Agent": _UA})
+    if _retry:
+        _pace()
+    else:
+        _mark_request()
     try:
         with urlopen(req, timeout=timeout) as resp:
             root = ET.fromstring(_read_capped(resp))
@@ -202,13 +235,17 @@ def _fetch_subreddit_rss(
                 sub, ticker, wait,
             )
             time.sleep(wait)
-            return _fetch_subreddit_rss(ticker, sub, limit, timeout, _retry=False)
+            return _fetch_subreddit_rss(ticker, sub, limit, timeout, _retry=False, errors=errors)
         logger.warning("Reddit RSS fetch failed for r/%s · %s: %s", sub, ticker, exc)
+        if errors is not None:
+            errors.append(f"HTTP {exc.code}" + (" after one retry" if exc.code == 429 else ""))
         return None
     except (OSError, http.client.HTTPException, ET.ParseError) as exc:
         # OSError covers URLError/TimeoutError/connection resets; HTTPException
         # covers chunked-transfer errors (IncompleteRead/BadStatusLine, #1024).
         logger.warning("Reddit RSS fetch failed for r/%s · %s: %s", sub, ticker, exc)
+        if errors is not None:
+            errors.append(type(exc).__name__)
         return None
 
     posts = []
@@ -262,9 +299,11 @@ def fetch_reddit_posts(
     ticker = crypto_base(ticker) or ticker
     subreddits = list(subreddits)
     label = ", ".join(f"r/{s}" for s in subreddits)
-    fetched = _fetch_subreddit_rss(ticker, "+".join(subreddits), _FEED_PAGE, timeout)
+    errors: list[str] = []
+    fetched = _fetch_subreddit_rss(ticker, "+".join(subreddits), _FEED_PAGE, timeout, errors=errors)
     if fetched is None:
-        return f"<Reddit unavailable: fetch failed ({label}); this is not an absence of discussion>"
+        reason = f": {errors[-1]}" if errors else ""
+        return f"<Reddit unavailable: fetch failed ({label}){reason}; this is not an absence of discussion>"
 
     window = bool(start_date and end_date)
     posts = _within_window(fetched, start_date, end_date)

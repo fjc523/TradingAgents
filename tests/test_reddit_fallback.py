@@ -205,7 +205,7 @@ class TestOneRequestForAllSubreddits:
     def test_all_subreddits_share_one_request(self):
         calls = []
 
-        def record(t, subs, limit, timeout):
+        def record(t, subs, limit, timeout, **kwargs):
             calls.append((subs, limit))
             return []
 
@@ -311,3 +311,27 @@ def test_an_unavailable_screen_keeps_every_post_and_says_so():
         screened = reddit.fetch_reddit_posts("NVDA", subreddits=("a", "b"), screen=unavailable)
         plain = reddit.fetch_reddit_posts("NVDA", subreddits=("a", "b"))
     assert screened == "<Jev screening unavailable (HTTP 529); posts are unscreened>\n\n" + plain
+
+
+@pytest.mark.unit
+def test_requests_in_one_process_are_spaced_by_the_pacing_interval(monkeypatch):
+    """同一进程内相邻两次 Reddit 请求至少间隔 60 秒，不真实等待。"""
+    now = [1000.0]
+    waits = []
+    monkeypatch.setattr(reddit, "_MIN_INTERVAL_SECONDS", 60.0)
+    monkeypatch.setattr(reddit, "_clock", lambda: now[0])
+    monkeypatch.setattr(reddit, "_pace_sleep", lambda s: waits.append(s) or now.__setitem__(0, now[0] + s))
+    monkeypatch.setattr(reddit.random, "uniform", lambda a, b: 0.0)
+    with patch.object(reddit, "urlopen", return_value=_atom_resp()):
+        reddit._fetch_subreddit_rss("NVDA", "stocks", 5, 5.0)
+        now[0] += 15.0
+        reddit._fetch_subreddit_rss("TSLA", "stocks", 5, 5.0)
+    assert waits == [pytest.approx(45.0)]
+
+
+@pytest.mark.unit
+def test_a_failed_fetch_names_its_cause():
+    err = HTTPError("u", 403, "Forbidden", {}, None)
+    with patch.object(reddit, "urlopen", side_effect=err):
+        out = reddit.fetch_reddit_posts("NVDA")
+    assert "Reddit unavailable" in out and "HTTP 403" in out

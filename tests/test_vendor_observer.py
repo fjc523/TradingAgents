@@ -30,3 +30,13 @@ def test_observer_exception_does_not_change_result():
         assert observed_call("get_news", "alpaca", lambda: "新闻") == "新闻"
     finally:
         reset_vendor_observer(token)
+
+
+def test_placeholder_failure_text_is_reported_as_reason():
+    events = []
+    token = set_vendor_observer(events.append)
+    try:
+        observed_call("fetch_reddit", "Reddit", lambda: "<Reddit unavailable: fetch failed (r/a): HTTP 429 after one retry; x>")
+    finally:
+        reset_vendor_observer(token)
+    assert events[0]["outcome"] == "failed" and "HTTP 429" in events[0]["error"]

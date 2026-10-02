@@ -62,10 +62,18 @@ def create_sentiment_analyst(llm):
         # Pass the analysis window so a historical run trims social posts to it
         # instead of leaking today's chatter into a backtest (#1220).
         screen = jev_screen(ticker)
-        from tradingagents.dataflows.vendor_observer import observed_call
-        stocktwits_block = observed_call("fetch_stocktwits", "StockTwits", fetch_stocktwits_messages,
-            ticker, observation_symbol=ticker, limit=30, start_date=start_date, end_date=end_date, screen=screen
-        )
+        from tradingagents.dataflows.config import get_config
+        from tradingagents.dataflows.vendor_observer import observed_call, report_vendor
+        if get_config().get("stocktwits_enabled", True):
+            stocktwits_block = observed_call("fetch_stocktwits", "StockTwits", fetch_stocktwits_messages,
+                ticker, observation_symbol=ticker, limit=30, start_date=start_date, end_date=end_date, screen=screen
+            )
+        else:
+            # 部署方停用时不请求，也不能写成“没有讨论”。
+            stocktwits_block = ("<StockTwits not enabled in this deployment (public API blocked by Cloudflare); "
+                                "this is not an absence of discussion>")
+            report_vendor("fetch_stocktwits", "StockTwits", "unconfigured",
+                          error="已停用：StockTwits 公共接口被 Cloudflare 拦截", symbol=ticker)
         reddit_block = observed_call("fetch_reddit", "Reddit", fetch_reddit_posts, ticker, observation_symbol=ticker, start_date=start_date, end_date=end_date, screen=screen)
 
         system_message = _build_system_message(
