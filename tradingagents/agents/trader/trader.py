@@ -9,7 +9,7 @@ from tradingagents.agents.context import (
     get_language_instruction,
     get_portfolio_context_from_state,
 )
-from tradingagents.agents.schemas import PRICE_PLAN_INSTRUCTION, TraderProposal, render_trader_proposal
+from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, PRICE_PLAN_INSTRUCTION, TraderProposal, render_trader_proposal
 from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
     bind_structured,
@@ -58,6 +58,7 @@ def create_trader(llm):
                     "or a range; convert a percentage distance to the price level it "
                     "implies, or omit the field if you cannot state a number. "
                     + PRICE_PLAN_INSTRUCTION
+                    + ALLOCATION_INSTRUCTION
                     + NO_EXTERNAL_TOOLS
                     + get_language_instruction()
                 ),

@@ -19,6 +19,7 @@ import tradingagents.agents.analysts.sentiment_analyst as sentiment
 from tradingagents.agents.managers.portfolio_manager import create_portfolio_manager
 from tradingagents.agents.managers.research_manager import create_research_manager
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS
+from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION
 from tradingagents.agents.trader.trader import create_trader
 
 
@@ -55,6 +56,7 @@ def test_trader_prompt_states_constraint():
         "market_report": "Current price $189.5; ATR 4.2.",
     })
     assert NO_EXTERNAL_TOOLS in _prompt_text(captured["prompt"])
+    assert ALLOCATION_INSTRUCTION in _prompt_text(captured["prompt"])
 
 
 @pytest.mark.unit
@@ -76,6 +78,7 @@ def test_research_manager_prompt_states_constraint():
         },
     })
     assert NO_EXTERNAL_TOOLS in _prompt_text(captured["prompt"])
+    assert ALLOCATION_INSTRUCTION in _prompt_text(captured["prompt"])
 
 
 @pytest.mark.unit
@@ -104,6 +107,7 @@ def test_portfolio_manager_prompt_states_constraint():
         "trader_investment_plan": "trader plan",
     })
     assert NO_EXTERNAL_TOOLS in _prompt_text(captured["prompt"])
+    assert ALLOCATION_INSTRUCTION in _prompt_text(captured["prompt"])
 
 
 @pytest.mark.unit
