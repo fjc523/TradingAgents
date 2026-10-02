@@ -128,3 +128,9 @@ class GetInstrumentContextFromStateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_fund_identity_omits_company_classification_and_crypto_hint():
+    text = build_instrument_context("SPY", "etf", {"name": "标普500基金", "sector": "金融", "industry": "银行"})
+    assert "Fund: 标普500基金" in text and "fund to analyze" in text
+    assert "金融" not in text and "银行" not in text and "crypto asset" not in text

@@ -23,7 +23,7 @@ def get_language_instruction(labelled: bool = False) -> str:
     """普通角色仅输出分析；三个决策角色保留可解析的英文标签。"""
     from tradingagents.dataflows.config import get_config
     lang = get_config().get("output_language", "English")
-    language = f" 请用{lang}输出全部正文。"
+    language = f" 请用{lang}输出全部正文。引用注入的数据限制编号，不复述原文；工具新增缺失由对应分析师说明一次。"
     if labelled:
         return language + (
             " **Rating**:、**Recommendation**:、**Action**:及FINAL TRANSACTION PROPOSAL:"
@@ -125,7 +125,8 @@ def build_instrument_context(
     on the analysis date.
     """
     is_crypto = asset_type == "crypto"
-    instrument_label = "asset" if is_crypto else "instrument"
+    is_etf = asset_type == "etf"
+    instrument_label = "asset" if is_crypto else "fund" if is_etf else "instrument"
     context = (
         f"The {instrument_label} to analyze is `{ticker}`. "
         "The tools serve this instrument; refer to it by this exact ticker in every report and recommendation, "
@@ -134,7 +135,7 @@ def build_instrument_context(
 
     identity = identity or {}
     name = identity.get("company_name") or identity.get("name")
-    label = "Name" if is_crypto else "Company"
+    label = "Name" if is_crypto else "Fund" if is_etf else "Company"
     details = []
     if is_historical(trade_date):
         if name:
@@ -145,7 +146,7 @@ def build_instrument_context(
     else:
         if name:
             details.append(f"{label}: {name}")
-        sector, industry = identity.get("sector"), identity.get("industry")
+        sector, industry = (None, None) if is_etf else (identity.get("sector"), identity.get("industry"))
         if sector and industry:
             details.append(f"Business classification: {sector} / {industry}")
         elif sector:
@@ -162,6 +163,8 @@ def build_instrument_context(
             "result explicitly disproves this resolved identity."
         )
 
+    if is_etf:
+        context += " 按ETF分析成分、集中度、广度与资金流，不套用单一公司的业务或加密资产逻辑。"
     if is_crypto:
         context += (
             " Treat it as a crypto asset rather than a company, and do not "
