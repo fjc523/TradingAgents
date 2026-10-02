@@ -11,26 +11,27 @@ from tradingagents.dataflows.vendors.yahoo.fundamentals import get_company_profi
 logger = logging.getLogger(__name__)
 
 
-def get_language_instruction() -> str:
-    """Return a prompt instruction for the configured output language.
+ANALYST_INSTRUCTION = (
+    "使用所提供的数据工具完成分析。工具失败时换一个功能相近的工具再试一次，"
+    "仍失败则列出缺失项及其影响，不写数据恢复后的假设性方案。"
+    "可用工具：{tool_names}。分析日期：{current_date}，所有工具日期以此为准。"
+    "{instrument_context}\n{system_message}"
+)
 
-    Returns empty string when English (default), so no extra tokens are used.
-    Applied to every agent whose output reaches the saved report —
-    analysts, researchers, debaters, research manager, trader, and
-    portfolio manager — so a non-English run produces a fully localized
-    report rather than a mix of languages.
-    """
+
+def get_language_instruction(labelled: bool = False) -> str:
+    """普通角色仅输出分析；三个决策角色保留可解析的英文标签。"""
     from tradingagents.dataflows.config import get_config
     lang = get_config().get("output_language", "English")
-    if lang.strip().lower() == "english":
-        return ""
-    # The labelled lines are read by the program, so they keep their English
-    # label and value: a translated rating line leaves the reader prose to
-    # search, where a negated rating ("not a Sell") reads as the call (#1435).
-    return (
-        f" Write your entire response in {lang}, except the labelled lines the format"
-        f" asks for (the \"**Rating**:\" line, \"FINAL TRANSACTION PROPOSAL:\"):"
-        f" keep their label and value in English, exactly as specified."
+    language = f" 请用{lang}输出全部正文。"
+    if labelled:
+        return language + (
+            " **Rating**:、**Recommendation**:、**Action**:及FINAL TRANSACTION PROPOSAL:"
+            "等格式标签与评级取值保持英文，按角色要求输出。"
+        )
+    return language + (
+        " 不要输出评级或交易动作结论，也不要输出Rating、Recommendation或"
+        "FINAL TRANSACTION PROPOSAL行。"
     )
 
 

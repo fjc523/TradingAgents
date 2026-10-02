@@ -140,8 +140,10 @@ def test_tool_using_analysts_keep_their_date_guidance():
     # tool date ranges (#836) — this fix is scoped to no-tool agents.
     import tradingagents.agents.analysts.market_analyst as market
     import tradingagents.agents.analysts.news_analyst as news
+    from tradingagents.agents.context import ANALYST_INSTRUCTION
     for module in (market, news):
-        assert "tool-call date ranges" in inspect.getsource(module)
+        assert "ANALYST_INSTRUCTION" in inspect.getsource(module)
+        assert "所有工具日期以此为准" in ANALYST_INSTRUCTION
 
 
 @pytest.mark.unit

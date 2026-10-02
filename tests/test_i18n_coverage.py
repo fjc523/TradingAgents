@@ -34,17 +34,19 @@ REPORT_AGENTS = [
 
 @pytest.mark.unit
 class TestLanguageInstruction:
-    def test_english_adds_no_tokens(self, monkeypatch):
+    def test_english_also_enforces_output_boundary(self, monkeypatch):
         from tradingagents.dataflows.config import set_config
         set_config({"output_language": "English"})
-        assert get_language_instruction() == ""
+        assert "English" in get_language_instruction()
+        assert "不要输出评级或交易动作" in get_language_instruction()
 
     def test_non_english_emits_directive(self):
         from tradingagents.dataflows.config import set_config
         set_config({"output_language": "中文"})
         out = get_language_instruction()
         assert "中文" in out
-        assert "entire response" in out
+        assert "全部正文" in out
+        assert "**Rating**:" not in out
 
     def test_the_labelled_lines_stay_as_the_format_gives_them(self):
         # The rating is read from its "**Rating**:" line; a translated label
@@ -52,7 +54,7 @@ class TestLanguageInstruction:
         # instead, and a Buy reads as Sell (#1435).
         from tradingagents.dataflows.config import set_config
         set_config({"output_language": "中文"})
-        out = get_language_instruction()
+        out = get_language_instruction(labelled=True)
         assert "**Rating**:" in out and "FINAL TRANSACTION PROPOSAL" in out
 
 
@@ -62,7 +64,8 @@ def test_report_agent_applies_language_instruction(rel):
     path = _AGENTS_DIR / rel
     assert path.exists(), f"missing agent module: {rel}"
     src = path.read_text(encoding="utf-8")
-    assert "get_language_instruction()" in src, (
+    expected = "get_language_instruction(labelled=True)" if rel.startswith(("managers/", "trader/")) else "get_language_instruction()"
+    assert expected in src, (
         f"{rel} does not apply get_language_instruction(); its output would "
         f"ignore the configured output_language (#740/#801)."
     )

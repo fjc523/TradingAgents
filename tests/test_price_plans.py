@@ -39,3 +39,13 @@ def test_zero_allocation_and_research_handoff_use_same_unit():
     assert "**目标配置（标准仓位=100%）**: 0%" in render_research_plan(plan)
     with pytest.raises(ValidationError):
         ResearchPlan.model_validate({**plan.model_dump(), "target_allocation_pct": -1})
+
+
+def test_price_schema_and_prompt_share_fixed_first_sentence():
+    """三类方案首句格式在提示和实际schema中一致。"""
+    assert "区间 X–Y 美元（依据：" in PRICE_PLAN_INSTRUCTION
+    assert "不适用：原因" in PRICE_PLAN_INSTRUCTION
+    for schema in (TraderProposal, PortfolioDecision):
+        for name in ("entry_plan", "add_plan", "reduce_plan"):
+            desc = schema.model_fields[name].description
+            assert "区间 X–Y 美元（依据：" in desc and "不适用：原因" in desc

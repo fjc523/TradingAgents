@@ -1,7 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from tradingagents.agents.analysts.turn import take_turn
-from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction
+from tradingagents.agents.context import ANALYST_INSTRUCTION, get_instrument_context_from_state, get_language_instruction
 from tradingagents.agents.tools import get_indicators, get_stock_data, get_verified_market_snapshot
 
 # The tools this analyst is offered; its tool node is built from the same tuple.
@@ -56,14 +56,7 @@ Write a very detailed and nuanced report of the trends you observe. Provide spec
             [
                 (
                     "system",
-                    "You are a helpful AI assistant, collaborating with other assistants."
-                    " Use the provided tools to progress towards answering the question."
-                    " If you are unable to fully answer, that's OK; another assistant with different tools"
-                    " will help where you left off. Execute what you can to make progress."
-                    " Report what your tools support; another agent decides the trade."
-                    " You have access to the following tools: {tool_names}."
-                    " Today's date is {current_date}; treat it as 'now' for all analysis and tool-call date ranges. {instrument_context}\n"
-                    "{system_message}",
+                    ANALYST_INSTRUCTION,
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]

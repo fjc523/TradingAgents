@@ -76,7 +76,7 @@ Write these sections, in this order, starting with the rating on its own line:
 {PRICE_PLAN_INSTRUCTION}
 {ALLOCATION_INSTRUCTION}
 
-{NO_EXTERNAL_TOOLS}{get_language_instruction()}"""
+{NO_EXTERNAL_TOOLS}{get_language_instruction(labelled=True)}"""
 
         # The typed rating is the decision; the rendered text only carries it.
         # Read back from text, a rating the thesis quotes could replace it.

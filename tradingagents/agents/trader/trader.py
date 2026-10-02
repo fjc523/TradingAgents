@@ -60,7 +60,7 @@ def create_trader(llm):
                     + PRICE_PLAN_INSTRUCTION
                     + ALLOCATION_INSTRUCTION
                     + NO_EXTERNAL_TOOLS
-                    + get_language_instruction()
+                    + get_language_instruction(labelled=True)
                 ),
             },
             {

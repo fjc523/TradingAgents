@@ -50,7 +50,7 @@ Write these sections, in this order, starting with the recommendation on its own
 
 {ALLOCATION_INSTRUCTION}
 
-{NO_EXTERNAL_TOOLS}""" + get_language_instruction()
+{NO_EXTERNAL_TOOLS}""" + get_language_instruction(labelled=True)
 
         investment_plan = invoke_structured_or_freetext(
             structured_llm,

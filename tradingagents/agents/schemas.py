@@ -163,7 +163,7 @@ PRICE_PLAN_INSTRUCTION = (
     "entry_price/stop_loss 仍填单一数值，entry_plan/add_plan/reduce_plan 填带条件的区间方案。"
     "请同时给出参考价格（报价币种、数据时点及质量）、建仓、加仓和减仓点位。"
     "建仓面向尚未持仓，加仓面向已有仓位；每项包含价格区间、触发条件、失效条件和具体依据。"
-    "减仓面向已有仓位，说明减配或止损的触发条件；每项第一句先写价格区间或不适用原因，供首页展示。"
+    "减仓面向已有仓位，说明减配或止损的触发条件；每项首句固定为「区间 X–Y 美元（依据：具体价位名称）」或「不适用：原因」，供首页展示。"
     "区间必须来自所提供行情或技术报告，不得编造报价或用目标价代替入场位；"
     "上一交易日收盘价必须注明日期，不得称为当时最新价；未核验时段的报价不得称为有效盘前价。"
     "不建议买入或证据不足时仍须明确等待条件/不适用原因，方案不能与最终评级相矛盾。"
@@ -215,13 +215,13 @@ class TraderProposal(BaseModel):
         default=None, description="有依据的参考价格、报价币种、数据日期/时间和质量；没有可靠报价时说明缺失。",
     )
     entry_plan: str | None = Field(
-        default=None, description="建仓方案：绝对价格区间、触发条件、失效条件和行情/技术位依据；不建议或证据不足时说明等待条件。",
+        default=None, description="建仓方案：首句固定为「区间 X–Y 美元（依据：具体价位名称）」或「不适用：原因」；后续写触发、失效条件与依据，不能编造行情；无证据时说明等待条件。",
     )
     add_plan: str | None = Field(
-        default=None, description="加仓方案：绝对价格区间、触发条件、失效条件和行情/技术位依据；面向已有仓位，不假设未知持仓。",
+        default=None, description="加仓方案：首句固定为「区间 X–Y 美元（依据：具体价位名称）」或「不适用：原因」；后续写触发、失效条件与依据，不能编造行情；面向已有仓位，不假设持仓数量。",
     )
     reduce_plan: str | None = Field(
-        default=None, description="减仓方案：第一句给出价格区间或不适用原因，再说明减配/止损触发条件、失效条件和依据；不编造行情。",
+        default=None, description="减仓方案：首句固定为「区间 X–Y 美元（依据：具体价位名称）」或「不适用：原因」；后续写触发、失效条件与依据，不能编造行情；面向已有仓位，不假设持仓数量。",
     )
 
     @field_validator("entry_price", "stop_loss", mode="before")
@@ -313,13 +313,13 @@ class PortfolioDecision(BaseModel):
         default=None, description="有依据的参考价格、报价币种、数据日期/时间和质量；没有可靠报价时说明缺失。",
     )
     entry_plan: str | None = Field(
-        default=None, description="建仓方案：绝对价格区间、触发条件、失效条件和行情/技术位依据；不建议或证据不足时说明等待条件。",
+        default=None, description="建仓方案：首句固定为「区间 X–Y 美元（依据：具体价位名称）」或「不适用：原因」；后续写触发、失效条件与依据，不能编造行情；无证据时说明等待条件。",
     )
     add_plan: str | None = Field(
-        default=None, description="加仓方案：绝对价格区间、触发条件、失效条件和行情/技术位依据；面向已有仓位，不假设未知持仓。",
+        default=None, description="加仓方案：首句固定为「区间 X–Y 美元（依据：具体价位名称）」或「不适用：原因」；后续写触发、失效条件与依据，不能编造行情；面向已有仓位，不假设持仓数量。",
     )
     reduce_plan: str | None = Field(
-        default=None, description="减仓方案：第一句给出价格区间或不适用原因，再说明减配/止损触发条件、失效条件和依据；不编造行情。",
+        default=None, description="减仓方案：首句固定为「区间 X–Y 美元（依据：具体价位名称）」或「不适用：原因」；后续写触发、失效条件与依据，不能编造行情；面向已有仓位，不假设持仓数量。",
     )
 
     @field_validator("price_target", mode="before")

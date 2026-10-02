@@ -400,3 +400,12 @@ def test_codex_auth_or_cli_version_errors_are_fatal(tmp_path, monkeypatch, stder
     monkeypatch.setenv("FAKE_CODEX_STDERR", stderr)
     with pytest.raises(CodexFatalConfigError):
         runner.run("prompt", {"type": "object"})
+
+
+def test_minimal_instructions_allow_only_payload_data_tools():
+    """数据工具请求可用，Codex原生能力仍被禁止。"""
+    path = Path(__file__).parents[1] / "tradingagents/llm_clients/codex_exec/minimal_instructions.md"
+    text = path.read_text()
+    assert "kind=tool_calls" in text and "未提供 tools 时" in text
+    assert "Codex 自带的 shell" in text and "不得访问凭据" in text
+    assert "不要调用工具" not in text
