@@ -20,7 +20,10 @@ def raise_for_empty(symbol: str, canonical: str, what: str) -> None:
     An empty answer from a Yahoo that cannot be reached is not an answer about
     the symbol, so the host is probed before "this symbol has no {what}" is said.
     """
+    from tradingagents.dataflows.yahoo_breaker import check_yahoo_breaker, trip_yahoo_breaker
+    check_yahoo_breaker()
     if not vendor_reachable(YAHOO_HOST):
+        trip_yahoo_breaker("连接不可用")
         raise VendorUnavailableError(f"Yahoo Finance is unreachable; no {what} was retrieved")
     raise NoMarketDataError(symbol, canonical, f"no {what}")
 
@@ -58,19 +61,19 @@ def yf_retry(func, max_retries=3, base_delay=2.0):
     itself: a Ticker keeps a failed ``info`` fetch as done, so asking the same
     one again reads an empty profile.
     """
-    for attempt in range(max_retries + 1):
-        try:
-            return func()
-        except YFRateLimitError as exc:
-            if attempt < max_retries:
-                delay = base_delay * (2 ** attempt)
-                logger.warning(f"Yahoo Finance rate limited, retrying in {delay:.0f}s (attempt {attempt + 1}/{max_retries})")
-                time.sleep(delay)
-            else:
-                raise VendorUnavailableError(
-                    f"Yahoo Finance rate limited after {max_retries} retries: {exc}"
-                ) from exc
-        except Exception as exc:
-            if _answered_empty(exc):
-                return None
-            raise VendorUnavailableError(f"Yahoo Finance request failed: {type(exc).__name__}") from exc
+    from tradingagents.dataflows.yahoo_breaker import (
+        check_yahoo_breaker, ensure_bounded_session, trip_yahoo_breaker, is_connection_failure,
+    )
+    check_yahoo_breaker()
+    ensure_bounded_session()
+    try:
+        return func()
+    except YFRateLimitError as exc:
+        trip_yahoo_breaker("rate limited")
+        raise VendorUnavailableError("Yahoo Finance rate limited，批次内熔断") from exc
+    except Exception as exc:
+        if _answered_empty(exc):
+            return None
+        if is_connection_failure(exc):
+            trip_yahoo_breaker(type(exc).__name__)
+        raise VendorUnavailableError(f"Yahoo Finance request failed: {type(exc).__name__}") from exc

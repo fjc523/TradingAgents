@@ -418,3 +418,12 @@ Please reference our work if you find *TradingAgents* provides you with some hel
 ETF与指数代理使用etf资产类型；个股使用stock。注入上下文末尾汇总编号的数据质量限制，各角色引用编号。运行结果保存实际含决策框架的注入文本，便于核对模型信息。
 
 日线快照、指标与记忆结算共用可注册来源链，主项目配置Alpaca SIP复权→富途前复权→Yahoo复权；可用时末尾追加Alpha Vantage工具。缓存按来源隔离，截止日期与原缓存新鲜度、陈旧检测、价格补缺语义保留，快照及指标标出实际来源。
+
+替代来源要求OpenD≥10.11：估值与内部人优先富途，新闻Alpaca→富途→Yahoo，报表SEC EDGAR→富途→Yahoo，宏观富途→FRED。Form144只作拟售；日历按周覆盖决策周期且只保留美国经济事件。VIX使用CBOE→FRED VIXCLS→Yahoo；板块手工→发行方持仓（含IWM）→Yahoo缓存。Yahoo首次连接/限频失败后批次熔断，HTTP单次≤10秒，下批重置。FRED可在config/secrets.env添加FRED_API_KEY，缺省不阻塞；仅剩未配置FRED时隐藏宏观工具。doctor核验OpenD服务端版本、FRED配置和CBOE。
+
+新增price_anchors默认提供器：以完整P日为截止，复用stockstats输出EMA10、SMA20/50/200、ATR14、P日OHLC和20/60日高低点及日期。历史不足不外推，来源失败注明锚点不可用。扩展时段按同一P官方收盘计算，另列来源前收盘；偏差超过0.1%标记，缺锚点注明基准未核验。
+
+
+### 来源观察钩子
+
+`dataflows.vendor_observer.set_vendor_observer(callback)`按上下文隔离观察者，路由、日线、Yahoo请求/熔断及社交预取上报来源尝试和耗时；用返回的token调用`reset_vendor_observer`清理。未注册时不构造事件。观察者异常不改变取数结果；主项目负责净化并按类别汇总，fork不负责站点展示。

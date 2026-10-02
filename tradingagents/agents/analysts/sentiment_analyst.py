@@ -62,10 +62,11 @@ def create_sentiment_analyst(llm):
         # Pass the analysis window so a historical run trims social posts to it
         # instead of leaking today's chatter into a backtest (#1220).
         screen = jev_screen(ticker)
-        stocktwits_block = fetch_stocktwits_messages(
-            ticker, limit=30, start_date=start_date, end_date=end_date, screen=screen
+        from tradingagents.dataflows.vendor_observer import observed_call
+        stocktwits_block = observed_call("fetch_stocktwits", "StockTwits", fetch_stocktwits_messages,
+            ticker, observation_symbol=ticker, limit=30, start_date=start_date, end_date=end_date, screen=screen
         )
-        reddit_block = fetch_reddit_posts(ticker, start_date=start_date, end_date=end_date, screen=screen)
+        reddit_block = observed_call("fetch_reddit", "Reddit", fetch_reddit_posts, ticker, observation_symbol=ticker, start_date=start_date, end_date=end_date, screen=screen)
 
         system_message = _build_system_message(
             ticker=ticker,

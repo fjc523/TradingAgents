@@ -64,7 +64,7 @@ def test_a_rate_limit_that_outlasts_the_retries_is_reported_as_one(yahoo, tool, 
 
 
 @pytest.mark.unit
-def test_the_indicator_path_retries_a_rate_limit(yahoo):
+def test_the_indicator_path_trips_after_first_rate_limit(yahoo):
     """The prices behind every indicator were fetched with ``yf.download``, which
     returns an empty frame for a 429, so they were never retried."""
     bar = pd.DataFrame({"Open": [1.0], "High": [1.0], "Low": [1.0], "Close": [1.0],
@@ -79,7 +79,12 @@ def test_the_indicator_path_retries_a_rate_limit(yahoo):
 
     yahoo.setattr(yf.Ticker, "history", history)
 
-    assert ohlcv.load_ohlcv("AAPL", DAY)["Close"].tolist() == [1.0]
+    with pytest.raises(VendorUnavailableError, match="rate limited"):
+        ohlcv.load_ohlcv("AAPL", DAY)
+    assert len(answers) == 1
+    with pytest.raises(VendorUnavailableError, match="熔断"):
+        ohlcv.load_ohlcv("AAPL", DAY)
+    assert len(answers) == 1
 
 
 @pytest.mark.unit
@@ -123,6 +128,8 @@ def test_a_price_request_that_raises_is_unavailable_whether_or_not_yahoo_answers
 
     yahoo.setattr(yf.Ticker, "history", refused)
     for reachable in (False, True):
+        from tradingagents.dataflows.yahoo_breaker import reset_yahoo_breaker
+        reset_yahoo_breaker()
         yahoo.setattr(common, "vendor_reachable", lambda url, _r=reachable: _r)
         with pytest.raises(VendorUnavailableError, match="request failed"):
             ohlcv.load_ohlcv("AAPL", DAY)

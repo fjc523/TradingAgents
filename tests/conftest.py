@@ -133,3 +133,12 @@ def _isolate_config():
     config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
     yield
     config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
+
+
+@pytest.fixture(autouse=True)
+def _separate_yahoo_batches():
+    """测试代表独立批次，不共享上一用例的熔断状态。"""
+    from tradingagents.dataflows.yahoo_breaker import reset_yahoo_breaker
+    reset_yahoo_breaker()
+    yield
+    reset_yahoo_breaker()

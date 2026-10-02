@@ -1,4 +1,5 @@
 import logging
+from tradingagents.dataflows.vendor_observer import observed_call
 
 from tradingagents.dataflows.config import get_config
 from tradingagents.dataflows.errors import (
@@ -246,7 +247,7 @@ def route_to_vendor(method: str, *args, **kwargs):
         impl_func = vendor_impl[0] if isinstance(vendor_impl, list) else vendor_impl
 
         try:
-            return impl_func(*args, **kwargs)
+            return observed_call(method, vendor, impl_func, *args, observation_symbol=args[0] if args else kwargs.get("ticker"), **kwargs)
         except VendorUnavailableError as e:
             logger.warning("Vendor %r unavailable for %s: %s; trying next vendor.", vendor, method, e)
             # Kept so an all-unavailable chain can say the vendor was the
@@ -308,3 +309,10 @@ def route_to_vendor(method: str, *args, **kwargs):
         raise first_error
 
     raise RuntimeError(f"No available vendor for '{method}'")
+
+
+def register_vendor_method(method, name, impl):
+    """允许主项目注入项目特定来源，保持fork不依赖富途SDK。"""
+    if method not in VENDOR_METHODS:
+        raise ValueError(f"不支持的方法：{method}")
+    VENDOR_METHODS[method][name] = impl

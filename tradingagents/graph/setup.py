@@ -1,4 +1,5 @@
 import logging
+from dataclasses import replace
 from collections import Counter
 from typing import Any, TypedDict
 
@@ -119,6 +120,8 @@ class GraphSetup:
                 - "fundamentals": Fundamentals analyst
         """
         plan = build_analyst_execution_plan(selected_analysts)
+        from tradingagents.agents.analysts.news_analyst import available_news_tools
+        plan = replace(plan, specs=[replace(spec, tools=available_news_tools()) if spec.key == "news" else spec for spec in plan.specs])
 
         analyst_factories = {
             "market": lambda: create_market_analyst(self.quick_thinking_llm),

@@ -62,6 +62,9 @@ class ResolveInstrumentIdentityTests(unittest.TestCase):
             type(mock.return_value).info = property(lambda self: (_ for _ in ()).throw(TimeoutError()))
             self.assertEqual(resolve_instrument_identity("TOTDY"), {})
             type(mock.return_value).info = {"longName": "TOTO LTD."}
+            self.assertEqual(resolve_instrument_identity("TOTDY"), {})
+            from tradingagents.dataflows.yahoo_breaker import reset_yahoo_breaker
+            reset_yahoo_breaker()
             self.assertEqual(resolve_instrument_identity("TOTDY")["company_name"], "TOTO LTD.")
 
     def test_result_is_cached(self):

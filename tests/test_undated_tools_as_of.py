@@ -161,6 +161,8 @@ def test_an_unreachable_vendor_is_not_reported_as_a_missing_symbol(monkeypatch):
     with pytest.raises(VendorUnavailableError, match="unreachable"):
         yahoo_fundamentals.get_balance_sheet("AAPL", "annual", get_current_date())
 
+    from tradingagents.dataflows.yahoo_breaker import reset_yahoo_breaker
+    reset_yahoo_breaker()
     monkeypatch.setattr(common, "vendor_reachable", lambda url: True)
     with pytest.raises(NoMarketDataError):
         yahoo_fundamentals.get_balance_sheet("AAPL", "annual", get_current_date())
@@ -201,6 +203,8 @@ def test_the_price_path_also_tells_an_outage_from_an_unknown_symbol(monkeypatch)
     with pytest.raises(VendorUnavailableError, match="unreachable"):
         yahoo_market.get_YFin_data_online("AAPL", "2026-09-01", "2026-09-10")
 
+    from tradingagents.dataflows.yahoo_breaker import reset_yahoo_breaker
+    reset_yahoo_breaker()
     monkeypatch.setattr(common, "vendor_reachable", lambda url: True)
     with pytest.raises(NoMarketDataError):
         yahoo_market.get_YFin_data_online("AAPL", "2026-09-01", "2026-09-10")
