@@ -83,16 +83,64 @@ def refresh_news(state, stage, config=None):
     return update
 
 
+def refresh_macro(state, stage):
+    """决策节点前重新取当日经济数据标题，按标题去重。
+
+    数据源存在收录延迟：发布时间早于上次查询的标题可能在之后才可见，因此不按
+    发布时间与上次查询比较，而是与初始上下文及已纳入的标题去重。取数函数由调用
+    项目通过 ``_late_macro_refresher`` 提供，返回带 ``title`` 的字典列表。
+    """
+    settings = get_config()
+    refresher = settings.get('_late_macro_refresher')
+    if not settings.get('late_news_refresh') or settings.get('news_cutoff_utc') or not callable(refresher):
+        return {}
+    existing = list(state.get('late_macro', []))
+    seen = {str(title).casefold() for title in settings.get('_late_macro_seen', [])}
+    seen |= {row['title'].casefold() for row in existing}
+    try:
+        rows = refresher()
+        fetched = current_time().isoformat()
+        fresh = []
+        for row in rows:
+            title = str(row.get('title', ''))
+            if not title or title.casefold() in seen:
+                continue
+            fresh.append({**row, 'stage': stage, 'fetched_at': fetched})
+            seen.add(title.casefold())
+        return {'late_macro': (existing + fresh)[:20]}
+    except Exception as exc:
+        return {'late_macro_errors': [*state.get('late_macro_errors', []),
+                                      f'{stage}阶段补抓经济数据失败：{type(exc).__name__}']}
+
+
 def with_news_refresh(node, stage):
     def wrapped(state, config):
-        update = refresh_news(state, stage, config)
+        update = {**refresh_news(state, stage, config), **refresh_macro(state, stage)}
         return {**update, **node({**state, **update})}
     return wrapped
 
 
-def render_late_news(state):
-    rows, errors = state.get('late_news', []), state.get('late_news_errors', [])
+def render_late_macro(state):
+    rows, errors = state.get('late_macro', []), state.get('late_macro_errors', [])
     if not rows and not errors: return ''
+    lines = ['\n\n## 分析期间新增经济数据（数据源收录后补抓）']
+    for row in rows:
+        label = '组合经理阶段补抓，上游未评估' if row.get('stage') == 'portfolio' else '研究阶段补抓'
+        if row.get('actual'):
+            detail = f"实际 {row['actual']}，预期 {row.get('estimate') or '—'}，前值 {row.get('prior') or '—'}"
+            lines.append(f"- {row.get('created_at') or '时间未知'} · {row.get('name') or row['title']}：{detail}（{label}）")
+        else:
+            lines.append(f"- {row.get('created_at') or '时间未知'} · {row['title']}（{label}）")
+    if any(row.get('stage') == 'portfolio' for row in rows):
+        lines.append('组合经理须逐条说明上游未评估的经济数据是否改变评级、目标配置或点位及理由；需要重新辩论时写“建议重跑”，不得声称上游已评估。')
+    if errors: lines.extend(['数据限制：', *errors])
+    return '\n'.join(lines)
+
+
+def render_late_news(state):
+    macro = render_late_macro(state)
+    rows, errors = state.get('late_news', []), state.get('late_news_errors', [])
+    if not rows and not errors: return macro
     timestamp = parse_time(state.get('news_last_fetched_at'))
     cutoff = timestamp.astimezone(ZoneInfo('America/New_York')).strftime('%H:%M') if timestamp else '未记录'
     lines = [f'\n\n## 分析期间新增消息（截至 {cutoff} ET）']
@@ -101,4 +149,4 @@ def render_late_news(state):
         if row['stage'] == 'portfolio':
             lines.append('仅组合经理阶段纳入：上游未评估。组合经理须逐条说明是否改变评级、目标配置或点位及理由；需要重新辩论时写“建议重跑”，不得声称上游已评估。')
     if errors: lines.extend(['数据限制：', *errors])
-    return '\n'.join(lines)
+    return '\n'.join(lines) + macro
