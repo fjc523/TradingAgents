@@ -429,3 +429,8 @@ ETF与指数代理使用etf资产类型；个股使用stock。注入上下文末
 `dataflows.vendor_observer.set_vendor_observer(callback)`按上下文隔离观察者，路由、日线、Yahoo请求/熔断及社交预取上报来源尝试和耗时；用返回的token调用`reset_vendor_observer`清理。未注册时不构造事件。观察者异常不改变取数结果；主项目负责净化并按类别汇总，fork不负责站点展示。
 
 结算的来源查询也遵守运行配置`price_data_end_date`，不向SIP请求本日未完成K线；持有期和结束日排除口径保持。
+
+
+### 分析期间补抓新闻（本项目维护分支）
+
+`late_news_refresh`缺省为false。调用项目开启后，实时分析在研究经理与组合经理节点前复用`get_news`来源链，筛选上一次查询起点之后发布的新闻，按链接和标题去重，最多纳入10条；回放冻结窗口时跳过。补抓失败只记录数据限制。仅组合经理阶段新增的消息必须逐条评估对评级、目标配置与点位的影响，必要时写「建议重跑」，不得声称上游已评估。新状态字段为`news_last_fetched_at`、`late_news`及`late_news_errors`。

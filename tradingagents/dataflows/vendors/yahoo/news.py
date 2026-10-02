@@ -94,7 +94,8 @@ def get_news_yfinance(
         if not in_window(data["pub_date"], start_dt, end_dt):
             continue
 
-        news_str += f"### {data['title']} (source: {data['publisher']})\n"
+        stamp = f", created_at: {data['pub_date'].isoformat()}" if get_config().get('late_news_refresh') and data['pub_date'] else ""
+        news_str += f"### {data['title']} (source: {data['publisher']}{stamp})\n"
         if data["summary"]:
             news_str += f"{data['summary']}\n"
         if data["link"]:
@@ -169,7 +170,8 @@ def get_global_news_yfinance(
 
     news_str = ""
     for data in in_window_news[:limit]:
-        news_str += f"### {data['title']} (source: {data['publisher']})\n"
+        stamp = f", created_at: {data['pub_date'].isoformat()}" if get_config().get('late_news_refresh') and data['pub_date'] else ""
+        news_str += f"### {data['title']} (source: {data['publisher']}{stamp})\n"
         if data["summary"]:
             news_str += f"{data['summary']}\n"
         if data["link"]:

@@ -90,6 +90,7 @@ def build_default_config() -> dict:
     the environment as it is now.
     """
     return _apply_env_overrides({
+        "late_news_refresh": False,
         # 价格方案规则，调用项目可覆盖。
         "price_plan_stop_atr_min": 1.0,
         "price_plan_stop_atr_normal": [1.5, 2.0],

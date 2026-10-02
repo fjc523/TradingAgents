@@ -60,7 +60,10 @@ def _analyst_graph(spec, agent, max_tool_rounds: int):
     that turn ends it whatever it answers, so a model that keeps calling tools
     cannot run the graph into its recursion limit (#1420).
     """
-    output = TypedDict(f"{spec.key.capitalize()}Report", {spec.report_key: str})
+    fields = {spec.report_key: str}
+    if spec.key == "news":
+        fields["news_last_fetched_at"] = str
+    output = TypedDict(f"{spec.key.capitalize()}Report", fields)
     graph = StateGraph(AgentState, output_schema=output)
     graph.add_node("agent", agent)
     graph.add_edge(START, "agent")
@@ -83,7 +86,18 @@ def _analyst_graph(spec, agent, max_tool_rounds: int):
                        spec.agent_node, max_tool_rounds, repeated)
         return agent({**state, "messages": [*state["messages"], HumanMessage(WRAP_UP)]})
 
-    graph.add_node("tools", ToolNode(list(spec.tools)))
+    tools_node = ToolNode(list(spec.tools))
+    if spec.key == "news":
+        def news_tools(state, config):
+            from .late_news import current_time
+            stamp = current_time().isoformat()
+            result = tools_node.invoke(state, config)
+            if "get_news" in calls(state["messages"][-1:]):
+                result["news_last_fetched_at"] = stamp
+            return result
+        graph.add_node("tools", news_tools)
+    else:
+        graph.add_node("tools", tools_node)
     graph.add_node("wrap_up", wrap_up)
     graph.add_conditional_edges("agent", _tools_or_done, ["tools", END])
     graph.add_conditional_edges("tools", more_or_wrap_up, ["agent", "wrap_up"])
@@ -148,12 +162,13 @@ class GraphSetup:
 
         workflow.add_node("Bull Researcher", bull_researcher_node)
         workflow.add_node("Bear Researcher", bear_researcher_node)
-        workflow.add_node("Research Manager", research_manager_node)
+        from .late_news import with_news_refresh
+        workflow.add_node("Research Manager", with_news_refresh(research_manager_node, "research"))
         workflow.add_node("Trader", trader_node)
         workflow.add_node("Aggressive Analyst", aggressive_analyst)
         workflow.add_node("Neutral Analyst", neutral_analyst)
         workflow.add_node("Conservative Analyst", conservative_analyst)
-        workflow.add_node("Portfolio Manager", portfolio_manager_node)
+        workflow.add_node("Portfolio Manager", with_news_refresh(portfolio_manager_node, "portfolio"))
 
         # The analysts work at the same time; the research debate starts once
         # every one of them has filed its report.

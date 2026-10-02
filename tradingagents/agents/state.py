@@ -43,6 +43,9 @@ class RiskDebateState(TypedDict):
 
 
 class AgentState(MessagesState):
+    news_last_fetched_at: str
+    late_news: list[dict]
+    late_news_errors: list[str]
     company_of_interest: Annotated[str, "Company that we are interested in trading"]
     asset_type: Annotated[str, "Asset type under analysis such as stock or crypto"]
     instrument_context: Annotated[str, "Deterministic ticker identity resolved at run start"]

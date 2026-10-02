@@ -183,12 +183,10 @@ def get_instrument_context_from_state(state: Mapping[str, Any]) -> str:
     consumer is never forced to make a yfinance call mid-graph.
     """
     context = state.get("instrument_context")
-    if isinstance(context, str) and context.strip():
-        return context
-    return build_instrument_context(
-        str(state["company_of_interest"]),
-        state.get("asset_type", "stock"),
-    )
+    if not isinstance(context, str) or not context.strip():
+        context = build_instrument_context(str(state["company_of_interest"]), state.get("asset_type", "stock"))
+    from tradingagents.graph.late_news import render_late_news
+    return context + render_late_news(state)
 
 
 def report_or_absent(text: str, source: str) -> str:
