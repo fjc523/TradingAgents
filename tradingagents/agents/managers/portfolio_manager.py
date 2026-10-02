@@ -10,13 +10,15 @@ free-text generation and the rating is read from that text.
 
 from __future__ import annotations
 
+import re
+
 from tradingagents.agents.context import (
     get_instrument_context_from_state,
     get_language_instruction,
     get_portfolio_context_from_state,
 )
-from tradingagents.agents.rating import parse_rating
-from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, PRICE_PLAN_INSTRUCTION, PortfolioDecision, render_pm_decision
+from tradingagents.agents.rating import RATING_DEFINITIONS, parse_rating
+from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, price_plan_instruction, PortfolioDecision, render_pm_decision
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS, bind_structured, invoke_structured
 
 
@@ -32,6 +34,9 @@ def create_portfolio_manager(llm):
         research_plan = state["investment_plan"]
         trader_plan = state["trader_investment_plan"]
 
+        market_report = (state.get("market_report") or "").strip()
+        table = re.search(r"(?m)^.*关键价位表.*\n(?:\s*\n)?((?:\|[^\n]*\n?)+)", market_report)
+        price_context = table[1] if table else market_report
         past_context = state.get("past_context", "")
         lessons_line = (
             f"- Lessons from prior decisions and outcomes:\n{past_context}\n"
@@ -47,12 +52,11 @@ def create_portfolio_manager(llm):
 
 ---
 
-**Rating Scale** (use exactly one):
-- **Buy**: Strong conviction to enter or add to position
-- **Overweight**: Favorable outlook, gradually increase exposure
-- **Hold**: Maintain current position, no action needed
-- **Underweight**: Reduce exposure, take partial profits
-- **Sell**: Exit position or avoid entry
+{RATING_DEFINITIONS}
+
+默认沿用交易员点位，修改须说明理由；方案必须与评级一致。Underweight或Sell不新建仓，建仓方案首句写不适用及原因。执行摘要≤4句，投资论点≤800字，每个价格方案≤200字。
+市场关键价位（提取失败时为完整市场报告）：
+{price_context}
 
 **Context:**
 - Research Manager's investment plan: **{research_plan}**
@@ -73,7 +77,7 @@ Write these sections, in this order, starting with the rating on its own line:
 - **Executive Summary**: the call and how to act on it
 - **Investment Thesis**: the evidence that decided it, and what would change it
 
-{PRICE_PLAN_INSTRUCTION}
+{price_plan_instruction()}
 {ALLOCATION_INSTRUCTION}
 
 {NO_EXTERNAL_TOOLS}{get_language_instruction(labelled=True)}"""

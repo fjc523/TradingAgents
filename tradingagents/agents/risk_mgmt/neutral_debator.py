@@ -29,21 +29,19 @@ def create_neutral_debator(llm):
 
         trader_decision = state["trader_investment_plan"]
 
-        prompt = f"""As the Neutral Risk Analyst, your role is to provide a balanced perspective, weighing both the potential benefits and risks of the trader's decision or plan. You prioritize a well-rounded approach, evaluating the upsides and downsides while factoring in broader market trends, potential economic shifts, and diversification strategies.Here is the trader's decision:
-
-{trader_decision}
-
-Your task is to challenge both the Aggressive and Conservative Analysts, pointing out where each perspective may be overly optimistic or overly cautious. Use insights from the following data sources to support a moderate, sustainable strategy to adjust the trader's decision:
-
+        prompt = f"""你是中立价格方案审阅人，使用个人投资者和单标的标准仓位100%口径，审阅交易员方案。方案与评级一致性、盈亏比、决策周期匹配。
+每人≤600字，依次输出：最大问题或遗漏；具体修改（目标配置、区间、止损/失效价、触发条件）；与交易员的分歧点。每项修改引用证据；无需修改时给明确理由。允许反对交易方向，不以立场替代数据。
+交易员方案：{trader_decision}
 {instrument_context}
 {portfolio_context}
-Market Research Report: {market_research_report}
-Social Media Sentiment Report: {sentiment_report}
-Latest World Affairs Report: {news_report}
-Company Fundamentals Report: {fundamentals_report}
-Here is the current conversation history: {history} Here is the last response from the aggressive analyst: {current_aggressive_response} Here is the last response from the conservative analyst: {current_conservative_response}. If there are no responses from the other viewpoints yet, present your own argument based on the available data.
-
-Engage actively by analyzing both sides critically, addressing weaknesses in the aggressive and conservative arguments to advocate for a more balanced approach. Challenge each of their points to illustrate why a moderate risk strategy might offer the best of both worlds, providing growth potential while safeguarding against extreme volatility. Focus on debating rather than simply presenting data, aiming to show that a balanced view can lead to the most reliable outcomes. Output conversationally as if you are speaking without any special formatting.""" + get_language_instruction()
+市场报告：{market_research_report}
+情绪报告：{sentiment_report}
+新闻报告：{news_report}
+基本面报告：{fundamentals_report}
+讨论历史：{history}
+其他视角：{current_aggressive_response}
+{current_conservative_response}
+""" + get_language_instruction()
 
         response = llm.invoke(prompt)
 

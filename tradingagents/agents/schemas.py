@@ -73,18 +73,8 @@ class PortfolioRating(StrEnum):
     SELL = "Sell"
 
 
-class TraderAction(StrEnum):
-    """3-tier transaction direction used by the Trader.
-
-    The Trader's job is to translate the Research Manager's investment plan
-    into a concrete transaction proposal: should the desk execute a Buy, a
-    Sell, or sit on Hold this round.  Position sizing and the nuanced
-    Overweight / Underweight calls happen later at the Portfolio Manager.
-    """
-
-    BUY = "Buy"
-    HOLD = "Hold"
-    SELL = "Sell"
+# 兼容旧导入名称；新代码统一使用五档PortfolioRating。
+TraderAction = PortfolioRating
 
 
 # ---------------------------------------------------------------------------
@@ -112,9 +102,8 @@ class ResearchPlan(BaseModel):
     )
     rationale: str = Field(
         description=(
-            "Conversational summary of the key points from both sides of the "
-            "debate, ending with which arguments led to the recommendation. "
-            "Speak naturally, as if to a teammate."
+            "≤600字，按决定性论据前3条（注明来源）、被驳回论据及理由、"
+            "关键不确定性、复评触发条件四部分输出。"
         ),
     )
     strategic_actions: str = Field(
@@ -159,7 +148,7 @@ def _allocation_text(value: float | None) -> str:
     return f"{value:g}%" if value is not None else "未提供"
 
 
-PRICE_PLAN_INSTRUCTION = (
+_PRICE_PLAN_BASE = (
     "entry_price/stop_loss 仍填单一数值，entry_plan/add_plan/reduce_plan 填带条件的区间方案。"
     "请同时给出参考价格（报价币种、数据时点及质量）、建仓、加仓和减仓点位。"
     "建仓面向尚未持仓，加仓面向已有仓位；每项包含价格区间、触发条件、失效条件和具体依据。"
@@ -168,6 +157,32 @@ PRICE_PLAN_INSTRUCTION = (
     "上一交易日收盘价必须注明日期，不得称为当时最新价；未核验时段的报价不得称为有效盘前价。"
     "不建议买入或证据不足时仍须明确等待条件/不适用原因，方案不能与最终评级相矛盾。"
 )
+
+
+def price_plan_instruction(config=None) -> str:
+    """从当前配置渲染方案规则；不做事后数值校验。"""
+    if config is None:
+        from tradingagents.dataflows.config import get_config
+        config = get_config()
+    minimum = config.get("price_plan_stop_atr_min", 1.0)
+    normal = config.get("price_plan_stop_atr_normal", (1.5, 2.0))
+    maximum = config.get("price_plan_stop_atr_max", 2.5)
+    reward = config.get("price_plan_min_reward_risk", 1.5)
+    return _PRICE_PLAN_BASE + (
+        "每个区间必须引用价位锚点、快照或关键价位表中的具体项及日期；方案≤200字。"
+        "先把止损放在真实支撑或均线之外，买入按区间上沿（最不利端）计算距离。"
+        f"允许止损距离{minimum:g}–{maximum:g}倍ATR，推荐{normal[0]:g}–{normal[1]:g}倍；"
+        "低于下限不提供方案，超过上限改为等待回踩或下调配置，不直接给出该区间；"
+        "允许范围内但超出推荐区间须说明原因，ATR不可用须说明无法校验。"
+        "第一目标取最近的上方阻力，盈亏比=(第一目标−区间上沿)/(区间上沿−止损价)，"
+        f"建仓/加仓要求≥{reward:g}；不满足时首句写不适用及原因，再说明等待的入场价。"
+        "减仓不受盈亏比门槛约束，可在失效或第一目标附近分批执行。"
+        "stop_loss必须与建仓方案失效价一致，不适用时不编造数值。"
+    )
+
+
+# 旧导入仍可使用缺省渲染结果；角色运行时调用函数读取配置。
+PRICE_PLAN_INSTRUCTION = price_plan_instruction({})
 
 class TraderProposal(BaseModel):
     """Structured transaction proposal produced by the Trader.
@@ -178,8 +193,8 @@ class TraderProposal(BaseModel):
     entry, stop-loss, and sizing.
     """
 
-    action: TraderAction = Field(
-        description="The transaction direction. Exactly one of Buy / Hold / Sell.",
+    action: PortfolioRating = Field(
+        description="动作取Buy / Overweight / Hold / Underweight / Sell之一；与研究经理不同须在reasoning解释。",
     )
     reasoning: str = Field(
         description=(
@@ -231,12 +246,7 @@ class TraderProposal(BaseModel):
 
 
 def render_trader_proposal(proposal: TraderProposal) -> str:
-    """Render a TraderProposal to markdown.
-
-    The trailing ``FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL**`` line is
-    preserved for backward compatibility with the analyst stop-signal text
-    and any external code that greps for it.
-    """
+    """渲染五档动作，保留FINAL TRANSACTION PROPOSAL行及旧三档兼容。"""
     parts = [
         f"**Action**: {proposal.action.value}",
         "",
@@ -286,15 +296,12 @@ class PortfolioDecision(BaseModel):
     )
     executive_summary: str = Field(
         description=(
-            "A concise action plan covering entry strategy, position sizing, "
-            "key risk levels, and time horizon. Two to four sentences."
+            "执行摘要≤4句，说明方向、目标配置、关键风险和决策周期。"
         ),
     )
     investment_thesis: str = Field(
         description=(
-            "Detailed reasoning anchored in specific evidence from the analysts' "
-            "debate. If prior lessons are referenced in the prompt context, "
-            "incorporate them; otherwise rely solely on the current analysis."
+            "投资论点≤800字，引用具体证据及历史教训，说明复评触发；默认沿用交易员点位，修改须给理由。"
         ),
     )
     price_target: float | None = Field(
@@ -409,24 +416,13 @@ class SentimentReport(BaseModel):
     )
     confidence: Literal["low", "medium", "high"] = Field(
         description=(
-            "Confidence in the assessment based on data quality and sample size. "
-            "Use 'low' when one or more sources returned a placeholder or fewer "
-            "than 5 data points; 'medium' when data is present but sparse; "
-            "'high' when all three sources returned substantive data."
+            "按数据质量与样本量选low/medium/high；StockTwits和Reddit均无可用本标的观点时必须low。"
         ),
     )
     narrative: str = Field(
         description=(
-            "Full sentiment report covering, in order: "
-            "(1) source-by-source breakdown with specific evidence (cite message "
-            "counts, ratios, notable posts); "
-            "(2) cross-source divergences and alignments; "
-            "(3) dominant narrative themes; "
-            "(4) catalysts and risks surfaced by the data; "
-            "(5) a markdown table summarising key sentiment signals, their "
-            "direction, source, and supporting evidence. "
-            "Keep it informative and substantive: develop each section thoroughly "
-            "with concrete evidence so every point adds new signal for the trader."
+            "narrative≤1000字，分列新闻语气与社交情绪，引用样本与来源，说明分歧、主题、催化与风险；"
+            "无可用社交观点时首段写本评分仅反映新闻语气。"
         ),
     )
 

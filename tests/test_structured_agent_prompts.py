@@ -20,6 +20,7 @@ from tradingagents.agents.managers.portfolio_manager import create_portfolio_man
 from tradingagents.agents.managers.research_manager import create_research_manager
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION
+from tradingagents.agents.rating import RATING_DEFINITIONS
 from tradingagents.agents.trader.trader import create_trader
 
 
@@ -57,6 +58,7 @@ def test_trader_prompt_states_constraint():
     })
     assert NO_EXTERNAL_TOOLS in _prompt_text(captured["prompt"])
     assert ALLOCATION_INSTRUCTION in _prompt_text(captured["prompt"])
+    assert RATING_DEFINITIONS in _prompt_text(captured["prompt"])
 
 
 @pytest.mark.unit
@@ -79,6 +81,7 @@ def test_research_manager_prompt_states_constraint():
     })
     assert NO_EXTERNAL_TOOLS in _prompt_text(captured["prompt"])
     assert ALLOCATION_INSTRUCTION in _prompt_text(captured["prompt"])
+    assert RATING_DEFINITIONS in _prompt_text(captured["prompt"])
 
 
 @pytest.mark.unit
@@ -108,6 +111,7 @@ def test_portfolio_manager_prompt_states_constraint():
     })
     assert NO_EXTERNAL_TOOLS in _prompt_text(captured["prompt"])
     assert ALLOCATION_INSTRUCTION in _prompt_text(captured["prompt"])
+    assert RATING_DEFINITIONS in _prompt_text(captured["prompt"])
 
 
 @pytest.mark.unit

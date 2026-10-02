@@ -194,8 +194,8 @@ def test_research_layer_sizes_against_a_standard_allocation():
     from tradingagents.agents.schemas import ResearchPlan
 
     description = ResearchPlan.model_fields["strategic_actions"].description
-    assert "standard allocation" in description
-    assert "does not see the caller's holdings" in description
+    assert "单标的标准仓位100%" in description
+    assert "未知真实持仓" in description
 
 
 @pytest.mark.unit

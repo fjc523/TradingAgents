@@ -545,3 +545,12 @@ def test_the_trader_names_the_levels_it_did_not_give():
     for field in ("Entry Price", "Stop Loss", "Position Sizing"):
         assert field in rendered
     assert rendered.lower().count("not provided") == 3
+
+
+@pytest.mark.parametrize("rating", ["Overweight", "Underweight"])
+def test_trader_keeps_intermediate_five_tier_action(rating):
+    proposal = TraderProposal(action=rating, reasoning="同意研究经理")
+    rendered = render_trader_proposal(proposal)
+    assert "**Action**: " + rating in rendered
+    assert "FINAL TRANSACTION PROPOSAL: **" + rating.upper() + "**" in rendered
+    assert TraderAction is PortfolioRating

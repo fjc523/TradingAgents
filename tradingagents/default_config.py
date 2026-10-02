@@ -90,6 +90,11 @@ def build_default_config() -> dict:
     the environment as it is now.
     """
     return _apply_env_overrides({
+        # 价格方案规则，调用项目可覆盖。
+        "price_plan_stop_atr_min": 1.0,
+        "price_plan_stop_atr_normal": [1.5, 2.0],
+        "price_plan_stop_atr_max": 2.5,
+        "price_plan_min_reward_risk": 1.5,
         "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR") or os.path.join(_TRADINGAGENTS_HOME, "logs"),
         "data_cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR") or os.path.join(_TRADINGAGENTS_HOME, "cache"),
         "memory_log_path": os.getenv("TRADINGAGENTS_MEMORY_LOG_PATH") or os.path.join(_TRADINGAGENTS_HOME, "memory", "trading_memory.md"),

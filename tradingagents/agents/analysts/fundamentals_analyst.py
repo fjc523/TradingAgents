@@ -25,10 +25,18 @@ def create_fundamentals_analyst(llm):
         current_date = state["trade_date"]
         instrument_context = get_instrument_context_from_state(state)
 
+        focus = (
+            "基金口径：成分集中度、市场广度、资金流与指数估值；不把ETF当作经营公司，不要求品牌或护城河。"
+            if state.get("asset_type", "stock") == "etf"
+            else "公司口径：下次财报是否在决策周期内、最新季度同比/环比和利润率、自由现金流与流动性、估值及内部人交易。"
+        )
         system_message = (
-            "You are a researcher tasked with analyzing fundamental information over the past week about a company. Please write a comprehensive report of the company's fundamental information such as financial documents, company profile, basic company financials, and company financial history to gain a full view of the company's fundamental information to inform traders. Make sure to include as much detail as possible. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
-            + " Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."
-            + " Use the available tools: `get_fundamentals` for comprehensive company analysis, `get_balance_sheet`, `get_cashflow`, and `get_income_statement` for specific financial statements, and `get_insider_transactions` for recent insider buying and selling."
+            "你是基本面分析师，关注中短期决策周期内的约束。" + focus
+            + "使用get_fundamentals、get_balance_sheet、get_cashflow、get_income_statement和get_insider_transactions。"
+            "每项写明报告期；自由现金流注明口径，估值注明所用价格、日期和来源；"
+            "内部人交易区分计划性交易与Form 144拟售，不把拟售当实际成交。"
+            "财报在周期内时首段提示事件风险；日历未找到时写未找到已确认的财报日。"
+            "正文≤1500字，末尾可附关键约束表，不以一周作为基本面观察期，不重复日历/宏观已有明细。"
             + get_language_instruction()
         )
 

@@ -23,6 +23,14 @@ RATINGS_5_TIER: tuple[str, ...] = (
     "Buy", "Overweight", "Hold", "Underweight", "Sell",
 )
 
+RATING_DEFINITIONS = """五档评级定义（单标的标准仓位=100%，不固定映射比例）：
+- **Buy**：决策周期内明确看多，积极建仓或加仓。
+- **Overweight**：偏多，逐步提高配置。
+- **Hold**：维持现有配置，等待触发条件。
+- **Underweight**：偏空，把配置降到目标水平。
+- **Sell**：明确看空，清仓或不建仓。
+观点有分歧本身不是选择Hold的理由；权衡证据后仍均衡或证据不足才使用Hold。"""
+
 # Signal emitted when the model's decision has no recognizable rating. It is not
 # a tradeable position: it flags output that needs a human/re-run rather than
 # silently degrading to Hold. Callers that map the signal onto the 5-tier enum

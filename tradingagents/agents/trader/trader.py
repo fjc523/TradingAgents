@@ -9,7 +9,8 @@ from tradingagents.agents.context import (
     get_language_instruction,
     get_portfolio_context_from_state,
 )
-from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, PRICE_PLAN_INSTRUCTION, TraderProposal, render_trader_proposal
+from tradingagents.agents.rating import RATING_DEFINITIONS
+from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, price_plan_instruction, TraderProposal, render_trader_proposal
 from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
     bind_structured,
@@ -48,7 +49,7 @@ def create_trader(llm):
                 "role": "system",
                 "content": (
                     "You are a trading agent analyzing market data to make investment decisions. "
-                    "Based on your analysis, provide a specific recommendation to buy, sell, or hold. "
+                    "输出五档动作，与研究经理不同须说明原因；观点有分歧本身不是Hold的理由。 "
                     + grounding
                     # Entry/stop are numeric price fields. Asking for concrete
                     # levels invites a percentage ("15%"), which is not a price
@@ -57,7 +58,8 @@ def create_trader(llm):
                     "instrument's quote currency (for example 189.5), never a percentage "
                     "or a range; convert a percentage distance to the price level it "
                     "implies, or omit the field if you cannot state a number. "
-                    + PRICE_PLAN_INSTRUCTION
+                    + price_plan_instruction()
+                    + RATING_DEFINITIONS
                     + ALLOCATION_INSTRUCTION
                     + NO_EXTERNAL_TOOLS
                     + get_language_instruction(labelled=True)
@@ -75,9 +77,7 @@ def create_trader(llm):
                     "## Output\n\n"
                     "Write these sections, in this order, starting with the action "
                     "on its own line:\n\n"
-                    "- **Action**: exactly one of Buy / Hold / Sell. A research "
-                    "recommendation of Overweight is a Buy and Underweight is a Sell, "
-                    "sized by how strong the case is; conflict alone is not a Hold.\n"
+                    "- **Action**: exactly one of Buy / Overweight / Hold / Underweight / Sell.\n"
                     "- **Reasoning**: why, against the plan and the price structure\n"
                     "- **Entry Price**, **Stop Loss**, **Position Sizing**: when you can state them"
                 ),

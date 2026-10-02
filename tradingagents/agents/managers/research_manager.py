@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction
+from tradingagents.agents.rating import RATING_DEFINITIONS
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, ResearchPlan, render_research_plan
 from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
@@ -26,16 +27,13 @@ def create_research_manager(llm):
 
 ---
 
-**Rating Scale** (use exactly one):
-- **Buy**: Strong conviction in the bull thesis; recommend taking or growing the position
-- **Overweight**: Constructive view; recommend gradually increasing exposure
-- **Hold**: Balanced view; recommend maintaining the current position
-- **Underweight**: Cautious view; recommend trimming exposure
-- **Sell**: Strong conviction in the bear thesis; recommend exiting or avoiding the position
+{RATING_DEFINITIONS}
 
 The debate always contains conflicting arguments; deciding which side is stronger is the job, so conflict alone is not a reason to Hold. Commit to the side with the stronger case, sized by how decisively it wins. Choose Hold only when the evidence is still balanced after that weighing, or too thin to support a call; do not manufacture a direction to appear decisive. Weigh the bull and bear cases on their merits, independent of which side spoke first or last.
 
 ---
+
+**历史教训：**\n{state.get("past_context", "") or "无已结算教训"}
 
 **Debate History:**
 {history}
@@ -45,7 +43,7 @@ The debate always contains conflicting arguments; deciding which side is stronge
 Write these sections, in this order, starting with the recommendation on its own line:
 
 - **Recommendation**: exactly one of Buy / Overweight / Hold / Underweight / Sell
-- **Rationale**: which arguments decided it
+- **Rationale**: ≤600字，依次为决定性论据前3条、被驳回论据及理由、关键不确定性、复评触发条件
 - **Strategic Actions**: 交易员具体行动，配置以单标的标准仓位100%为参考单位
 
 {ALLOCATION_INSTRUCTION}
