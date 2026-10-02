@@ -12,6 +12,10 @@ import pandas as pd
 def get_closes(ticker, start, end):
     """沿用既有结算口径，仅替换价格来源。"""
     cutoff = min(pd.Timestamp(end) - pd.Timedelta(days=1), pd.Timestamp.today().normalize())
+    from tradingagents.dataflows.config import get_config
+    price_end = get_config().get("price_data_end_date")
+    if price_end:
+        cutoff = min(cutoff, pd.Timestamp(price_end))
     data = load_ohlcv(normalize_symbol(ticker), cutoff.strftime("%Y-%m-%d"), fill_gaps=False)
     data = data[(data.Date >= pd.Timestamp(start)) & (data.Date < pd.Timestamp(end))]
     return data.set_index("Date")["Close"]

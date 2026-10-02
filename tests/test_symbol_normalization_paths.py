@@ -85,3 +85,19 @@ def _isolated_settlement_prices(tmp_path, monkeypatch):
     current = config.get_config()
     current["data_cache_dir"] = str(tmp_path / "settlement-prices")
     monkeypatch.setattr(config, "_config", current)
+
+
+
+def test_settlement_source_end_obeys_completed_daily_cutoff(monkeypatch):
+    import pandas as pd
+    from tradingagents.memory import settlement
+    from tradingagents.dataflows import config
+    monkeypatch.setattr(config, "get_config", lambda: {"price_data_end_date":"2026-10-01"})
+    seen = []
+    def load(symbol, end, fill_gaps):
+        seen.append(end)
+        return pd.DataFrame({"Date":pd.to_datetime(["2026-10-01"]),"Close":[100.]})
+    monkeypatch.setattr(settlement, "load_ohlcv", load)
+    closes = settlement.get_closes("TSLA","2026-10-01","2026-10-20")
+    assert seen == ["2026-10-01"]
+    assert closes.iloc[0] == 100

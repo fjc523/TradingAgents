@@ -14,6 +14,7 @@ def test_observer_reports_outcomes_and_resets():
         with pytest.raises(VendorUnavailableError):
             observed_call("get_news", "futu", failed)
         assert [row["outcome"] for row in events] == ["success", "failed"]
+        assert events[-1]['error'] == 'VendorUnavailableError：失败'
         assert all(row["duration_seconds"] >= 0 for row in events)
     finally:
         reset_vendor_observer(token)

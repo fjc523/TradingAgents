@@ -41,7 +41,7 @@ def observed_call(method, vendor, impl, *args, observation_symbol=None, **kwargs
     except Exception as exc:
         outcome = "unconfigured" if isinstance(exc, VendorNotConfiguredError) else "no_data" if isinstance(exc, NoMarketDataError) else "failed"
         report_vendor(method, vendor, outcome, duration=perf_counter()-started,
-                      error=type(exc).__name__, symbol=observation_symbol)
+                      error=type(exc).__name__+"："+str(exc), symbol=observation_symbol)
         raise
     text = str(value) if isinstance(value, str) else ""
     if "unavailable:" in text.lower() or text.startswith(("DATA_UNAVAILABLE", "NO_DATA_AVAILABLE")):

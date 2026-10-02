@@ -427,3 +427,5 @@ ETF与指数代理使用etf资产类型；个股使用stock。注入上下文末
 ### 来源观察钩子
 
 `dataflows.vendor_observer.set_vendor_observer(callback)`按上下文隔离观察者，路由、日线、Yahoo请求/熔断及社交预取上报来源尝试和耗时；用返回的token调用`reset_vendor_observer`清理。未注册时不构造事件。观察者异常不改变取数结果；主项目负责净化并按类别汇总，fork不负责站点展示。
+
+结算的来源查询也遵守运行配置`price_data_end_date`，不向SIP请求本日未完成K线；持有期和结束日排除口径保持。
