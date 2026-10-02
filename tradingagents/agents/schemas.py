@@ -143,6 +143,15 @@ def render_research_plan(plan: ResearchPlan) -> str:
 # ---------------------------------------------------------------------------
 
 
+PRICE_PLAN_INSTRUCTION = (
+    "entry_price/stop_loss 仍填单一数值，entry_plan/add_plan 填带条件的区间方案。"
+    "请同时给出参考价格（报价币种、数据时点及质量）、建仓点位和加仓点位。"
+    "建仓面向尚未持仓，加仓面向已有仓位；每项包含价格区间、触发条件、失效条件和具体依据。"
+    "区间必须来自所提供行情或技术报告，不得编造报价或用目标价代替入场位；"
+    "上一交易日收盘价必须注明日期，不得称为当时最新价；未核验时段的报价不得称为有效盘前价。"
+    "不建议买入或证据不足时仍须明确等待条件/不适用原因，方案不能与最终评级相矛盾。"
+)
+
 class TraderProposal(BaseModel):
     """Structured transaction proposal produced by the Trader.
 
@@ -182,6 +191,16 @@ class TraderProposal(BaseModel):
         description="Optional sizing guidance, e.g. '5% of portfolio'.",
     )
 
+    reference_price: str | None = Field(
+        default=None, description="有依据的参考价格、报价币种、数据日期/时间和质量；没有可靠报价时说明缺失。",
+    )
+    entry_plan: str | None = Field(
+        default=None, description="建仓方案：绝对价格区间、触发条件、失效条件和行情/技术位依据；不建议或证据不足时说明等待条件。",
+    )
+    add_plan: str | None = Field(
+        default=None, description="加仓方案：绝对价格区间、触发条件、失效条件和行情/技术位依据；面向已有仓位，不假设未知持仓。",
+    )
+
     @field_validator("entry_price", "stop_loss", mode="before")
     @classmethod
     def _nullish_float_to_none(cls, v):
@@ -206,6 +225,9 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
                          ("Stop Loss", proposal.stop_loss),
                          ("Position Sizing", proposal.position_sizing)):
         parts.extend(["", f"**{label}**: {value if value is not None and value != '' else 'not provided'}"])
+    for label, value in (("参考价格与时点", proposal.reference_price),
+                         ("建仓点位", proposal.entry_plan), ("加仓点位", proposal.add_plan)):
+        parts.extend(["", f"**{label}**: {value or '未提供；等待可靠行情及条件确认'}"])
     parts.extend([
         "",
         f"FINAL TRANSACTION PROPOSAL: **{proposal.action.value.upper()}**",
@@ -259,6 +281,16 @@ class PortfolioDecision(BaseModel):
         description="Optional recommended holding period, e.g. '3-6 months'.",
     )
 
+    reference_price: str | None = Field(
+        default=None, description="有依据的参考价格、报价币种、数据日期/时间和质量；没有可靠报价时说明缺失。",
+    )
+    entry_plan: str | None = Field(
+        default=None, description="建仓方案：绝对价格区间、触发条件、失效条件和行情/技术位依据；不建议或证据不足时说明等待条件。",
+    )
+    add_plan: str | None = Field(
+        default=None, description="加仓方案：绝对价格区间、触发条件、失效条件和行情/技术位依据；面向已有仓位，不假设未知持仓。",
+    )
+
     @field_validator("price_target", mode="before")
     @classmethod
     def _nullish_float_to_none(cls, v):
@@ -280,6 +312,9 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         "",
         f"**Investment Thesis**: {decision.investment_thesis}",
     ]
+    for label, value in (("参考价格与时点", decision.reference_price),
+                         ("建仓点位", decision.entry_plan), ("加仓点位", decision.add_plan)):
+        parts.extend(["", f"**{label}**: {value or '未提供；等待可靠行情及条件确认'}"])
     # Named even when absent: a missing line reads as a field nobody asked for,
     # so a reader cannot tell "no target" from "target not reported".
     target = decision.price_target if decision.price_target is not None else "not provided"

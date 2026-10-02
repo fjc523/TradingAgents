@@ -403,3 +403,8 @@ Please reference our work if you find *TradingAgents* provides you with some hel
       url={https://arxiv.org/abs/2412.20138}, 
 }
 ```
+
+
+### 本项目 fork 的决策角色与价格方案
+
+交易员与研究经理、组合经理统一使用 deep 角色，分析师及辩论保持 quick；具体模型和推理强度由调用项目配置。交易员和最终决策结构新增可选的参考价格/时点、建仓方案、加仓方案，旧结构仍可读取；方案要求有依据的价格区间、触发/失效条件，缺少可靠报价时说明等待，不增加额外模型调用。
