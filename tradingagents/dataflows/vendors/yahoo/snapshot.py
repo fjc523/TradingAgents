@@ -94,6 +94,7 @@ def build_verified_market_snapshot(
         f"## Verified market data snapshot for {symbol.upper()}",
         "",
         f"- Requested analysis date: {as_of_date}",
+        f"- 日线实际来源：{df.attrs.get('source', '未注明')}",
         f"- Latest trading row used: {latest_date}",
         "- Rows after the requested analysis date are excluded before verification.",
         "",

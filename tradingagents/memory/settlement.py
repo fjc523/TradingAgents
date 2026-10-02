@@ -5,7 +5,16 @@ import logging
 from datetime import datetime, timedelta
 
 from tradingagents.dataflows.symbols import normalize_symbol
-from tradingagents.dataflows.vendors.yahoo.market import get_closes
+from tradingagents.dataflows.ohlcv_sources import load_ohlcv
+import pandas as pd
+
+
+def get_closes(ticker, start, end):
+    """沿用既有结算口径，仅替换价格来源。"""
+    cutoff = min(pd.Timestamp(end) - pd.Timedelta(days=1), pd.Timestamp.today().normalize())
+    data = load_ohlcv(normalize_symbol(ticker), cutoff.strftime("%Y-%m-%d"), fill_gaps=False)
+    data = data[(data.Date >= pd.Timestamp(start)) & (data.Date < pd.Timestamp(end))]
+    return data.set_index("Date")["Close"]
 from tradingagents.llm_clients.errors import LLMNonRecoverableError
 
 logger = logging.getLogger(__name__)

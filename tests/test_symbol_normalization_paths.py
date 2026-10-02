@@ -5,6 +5,7 @@ the news path: a broker symbol like XAUUSD must resolve to the same Yahoo symbol
 (GC=F) that the price path uses, so identity, realized-return, and news lookups
 hit the right instrument instead of failing/mismatching.
 """
+import pytest
 import pandas as pd
 
 import tradingagents.agents.context as au
@@ -75,3 +76,12 @@ def test_news_lookup_normalizes_symbol(monkeypatch):
     assert seen["symbol"] == "GC=F"   # news queried with the canonical symbol
     assert "XAUUSD" in out            # the user's ticker stays in the report
     assert "GC=F" in out              # provenance noted
+
+
+@pytest.fixture(autouse=True)
+def _isolated_settlement_prices(tmp_path, monkeypatch):
+    """结算改用缓存来源链后，替身数据不得跨测试复用。"""
+    from tradingagents.dataflows import config
+    current = config.get_config()
+    current["data_cache_dir"] = str(tmp_path / "settlement-prices")
+    monkeypatch.setattr(config, "_config", current)

@@ -1018,7 +1018,7 @@ def test_a_longer_window_asks_for_enough_price_history(monkeypatch):
         def __init__(self, symbol):
             self.symbol = symbol
 
-        def history(self, start, end):
+        def history(self, start, end, **kwargs):
             asked["start"], asked["end"] = start, end
             import pandas as pd
             days = pd.bdate_range(start, end)
@@ -1133,3 +1133,12 @@ def test_a_close_that_is_not_a_price_is_skipped_not_scored(monkeypatch):
     raw, alpha, _, _ = settlement.fetch_returns("NVDA", "2026-01-05", 5, "SPY")
 
     assert raw == pytest.approx(105.0 / 100.0 - 1)   # the window opens on the first real close
+
+
+@pytest.fixture(autouse=True)
+def _isolated_settlement_prices(tmp_path, monkeypatch):
+    """结算改用缓存来源链后，替身数据不得跨测试复用。"""
+    from tradingagents.dataflows import config
+    current = config.get_config()
+    current["data_cache_dir"] = str(tmp_path / "settlement-prices")
+    monkeypatch.setattr(config, "_config", current)

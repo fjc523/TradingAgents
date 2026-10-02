@@ -158,7 +158,7 @@ def _cache_is_fresh(data_file, as_of_dt, now) -> bool:
     return as_of_dt.date() < now.date() or (now - written).total_seconds() <= OHLCV_CACHE_TTL_SECONDS
 
 
-def load_ohlcv(symbol: str, as_of_date: str, fill_gaps: bool = True) -> pd.DataFrame:
+def _load_yahoo_ohlcv(symbol: str, as_of_date: str, fill_gaps: bool = True) -> pd.DataFrame:
     """Fetch OHLCV data with caching, filtered to prevent look-ahead bias.
 
     Downloads 5 years of data up to today and caches per symbol. On
@@ -257,3 +257,9 @@ def load_ohlcv(symbol: str, as_of_date: str, fill_gaps: bool = True) -> pd.DataF
     return data
 
 
+
+
+def load_ohlcv(symbol: str, as_of_date: str, fill_gaps: bool = True) -> pd.DataFrame:
+    """保留原导入入口，使用已配置的日线来源链。"""
+    from tradingagents.dataflows.ohlcv_sources import load_ohlcv as load_sources
+    return load_sources(symbol, as_of_date, fill_gaps)

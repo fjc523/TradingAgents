@@ -97,15 +97,22 @@ TOOLS_CATEGORIES = {
 # categories (prices, fundamentals, news) still raise so a broken primary is loud.
 OPTIONAL_CATEGORIES = {"macro_data", "prediction_markets"}
 
+from functools import partial
+from tradingagents.dataflows.ohlcv_sources import stock_data_for_source, indicators_for_source
+
 # Mapping of methods to their vendor-specific implementations
 VENDOR_METHODS = {
     # core_stock_apis
     "get_stock_data": {
+        "alpaca": partial(stock_data_for_source, "alpaca"),
+        "futu": partial(stock_data_for_source, "futu"),
         "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
     },
     # technical_indicators
     "get_indicators": {
+        "alpaca": partial(indicators_for_source, "alpaca"),
+        "futu": partial(indicators_for_source, "futu"),
         "alpha_vantage": get_alpha_vantage_indicator,
         "yfinance": get_stock_stats_indicators_window,
     },

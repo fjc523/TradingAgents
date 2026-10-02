@@ -75,6 +75,7 @@ def get_stock_stats_indicators_window(
 ) -> str:
 
     best_ind_params = {
+        "close_20_sma": "20日均线：中短期趋势与动态支撑/阻力。",
         # Moving Averages
         "close_50_sma": (
             "50 SMA: A medium-term trend indicator. "
@@ -201,7 +202,8 @@ def get_stock_stats_indicators_window(
         + best_ind_params.get(indicator, "No description available.")
     )
 
-    return result_str
+    from tradingagents.dataflows.ohlcv_sources import LAST_SOURCE
+    return f"日线实际来源：{LAST_SOURCE.get()}\n" + result_str
 
 
 def _get_stock_stats_bulk(
