@@ -36,7 +36,7 @@ def create_news_analyst(llm):
         current_date = state["trade_date"]
         asset_type = state.get("asset_type", "stock")
         asset_label = "公司" if asset_type == "stock" else "基金或资产"
-        instrument_context = get_instrument_context_from_state(state)
+        instrument_context = get_instrument_context_from_state(state, profile='news_analyst')
 
         system_message = (
             f"你是新闻分析师，首先调用get_news(start_date, end_date)获取本{asset_label}的新闻，"

@@ -23,7 +23,7 @@ def create_trader(llm):
 
     def trader_node(state):
         company_name = state["company_of_interest"]
-        instrument_context = get_instrument_context_from_state(state)
+        instrument_context = get_instrument_context_from_state(state, profile='trader')
         investment_plan = state["investment_plan"]
         # The research plan digests the debate but loses exact price structure;
         # give the Trader the technical market report so entry/stop levels are

@@ -23,7 +23,7 @@ TOOLS = (
 def create_fundamentals_analyst(llm):
     def fundamentals_analyst_node(state):
         current_date = state["trade_date"]
-        instrument_context = get_instrument_context_from_state(state)
+        instrument_context = get_instrument_context_from_state(state, profile='fundamentals_analyst')
 
         focus = (
             "基金口径：成分集中度、市场广度、资金流与指数估值；不把ETF当作经营公司，不要求品牌或护城河。"

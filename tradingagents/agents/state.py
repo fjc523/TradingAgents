@@ -43,6 +43,10 @@ class RiskDebateState(TypedDict):
 
 
 class AgentState(MessagesState):
+    instrument_context_full: str
+    instrument_context_brief: str
+    context_compaction: bool
+    context_profiles: dict[str, str]
     news_last_fetched_at: str
     late_news: list[dict]
     late_news_errors: list[str]

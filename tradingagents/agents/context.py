@@ -173,7 +173,7 @@ def build_instrument_context(
     return context
 
 
-def get_instrument_context_from_state(state: Mapping[str, Any]) -> str:
+def get_instrument_context_from_state(state: Mapping[str, Any], profile: str | None = None) -> str:
     """Return the instrument context for the current run.
 
     Prefers the identity-resolved context computed once at run start and
@@ -183,6 +183,13 @@ def get_instrument_context_from_state(state: Mapping[str, Any]) -> str:
     consumer is never forced to make a yfinance call mid-graph.
     """
     context = state.get("instrument_context")
+    if state.get('context_compaction') and profile is not None:
+        # 档位随图state传递，不能读取其他并发图写入的进程默认配置。
+        default = 'full' if profile in {'news_analyst', 'research_manager', 'portfolio_manager'} else 'brief'
+        selected = (state.get('context_profiles') or {}).get(profile, default)
+        if profile in {'full', 'brief'}:
+            selected = profile
+        context = state.get(f'instrument_context_{selected}') or context
     if not isinstance(context, str) or not context.strip():
         context = build_instrument_context(str(state["company_of_interest"]), state.get("asset_type", "stock"))
     from tradingagents.graph.late_news import render_late_news

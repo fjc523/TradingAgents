@@ -19,7 +19,7 @@ def create_bear_researcher(llm):
         sentiment_report = report_or_absent(state["sentiment_report"], "sentiment")
         news_report = report_or_absent(state["news_report"], "news")
         fundamentals_report = report_or_absent(state["fundamentals_report"], "fundamentals")
-        instrument_context = get_instrument_context_from_state(state)
+        instrument_context = get_instrument_context_from_state(state, profile='bear_researcher')
         asset_type = state.get("asset_type", "stock")
         focus = (
             "关注基金成分集中度、市场广度、资金流、指数估值和追踪风险。"

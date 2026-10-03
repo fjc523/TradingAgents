@@ -16,7 +16,7 @@ def create_market_analyst(llm):
 
     def market_analyst_node(state):
         current_date = state["trade_date"]
-        instrument_context = get_instrument_context_from_state(state)
+        instrument_context = get_instrument_context_from_state(state, profile='market_analyst')
 
         system_message = (
             "你是市场分析师。首先调用get_verified_market_snapshot取得日线快照；"
