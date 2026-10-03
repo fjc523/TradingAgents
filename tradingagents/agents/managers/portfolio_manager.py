@@ -23,7 +23,7 @@ from tradingagents.agents.context import (
     get_language_instruction,
     get_portfolio_context_from_state,
 )
-from tradingagents.agents.rating import rating_definitions, output_flags, flags_for_text, parse_rating
+from tradingagents.agents.rating import rating_definitions, allocation_instruction, output_flags, flags_for_text, parse_rating
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, price_plan_instruction, PortfolioDecision, LegacyPortfolioDecision, render_pm_decision
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS, bind_structured, invoke_structured
 
@@ -91,7 +91,7 @@ Write these sections, in this order, starting with the rating on its own line:
 - **Investment Thesis**: the evidence that decided it, and what would change it
 
 {price_plan_instruction(config)}
-{ALLOCATION_INSTRUCTION}
+{allocation_instruction(config)}
 
 {NO_EXTERNAL_TOOLS}{get_language_instruction(labelled=True)}"""
 
@@ -117,7 +117,7 @@ Write these sections, in this order, starting with the rating on its own line:
 默认沿用交易员点位，修改须给具体理由。Underweight或Sell不新建仓。执行摘要≤4句、投资论点≤800字、每项点位≤200字。
 {rating_definitions(config)}
 {price_plan_instruction(config)}
-{ALLOCATION_INSTRUCTION}
+{allocation_instruction(config)}
 ## 输出要求
 - **Rating**：Buy / Overweight / Hold / Underweight / Sell
 - **Executive Summary**：方向、配置及如何执行

@@ -7,7 +7,7 @@ from tradingagents.agents.schemas import decision_schema
 from tradingagents.dataflows.social_result import lesson_reference_instruction
 
 from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction, report_or_absent
-from tradingagents.agents.rating import rating_definitions, output_flags, flags_for_text
+from tradingagents.agents.rating import rating_definitions, allocation_instruction, output_flags, flags_for_text
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, ResearchPlan, LegacyResearchPlan, EvidenceResearchPlan, CruxResearchPlan, render_research_plan
 from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
@@ -59,7 +59,7 @@ Write these sections, in this order, starting with the recommendation on its own
 - **Rationale**: ≤600字，依次为决定性论据前3条、被驳回论据及理由、关键不确定性、复评触发条件
 - **Strategic Actions**: 交易员具体行动，配置以单标的标准仓位100%为参考单位
 
-{ALLOCATION_INSTRUCTION}
+{allocation_instruction(config)}
 
 {NO_EXTERNAL_TOOLS}""" + get_language_instruction(labelled=True)
 
@@ -87,7 +87,7 @@ Write these sections, in this order, starting with the recommendation on its own
 - **Rationale**：≤600字，决定性论据前3条、驳回及原因、不确定性、复评触发。
 - **Strategic Actions**：给交易员的行动要求。
 - **引用核对**：≤200字，列辩手引用不符处及双方都遗漏但影响结论的事实；无则写“无”并列已核对的2–3个数据点。
-{ALLOCATION_INSTRUCTION}
+{allocation_instruction(config)}
 {NO_EXTERNAL_TOOLS}""" + get_language_instruction(labelled=True)
 
         if structured_debate:

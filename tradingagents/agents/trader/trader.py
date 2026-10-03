@@ -11,7 +11,7 @@ from tradingagents.agents.context import (
     get_language_instruction,
     get_portfolio_context_from_state,
 )
-from tradingagents.agents.rating import rating_definitions, output_flags, flags_for_text
+from tradingagents.agents.rating import rating_definitions, allocation_instruction, output_flags, flags_for_text
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, price_plan_instruction, TraderProposal, LegacyTraderProposal, render_trader_proposal
 from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
@@ -70,7 +70,7 @@ def create_trader(llm, config=None):
                     "implies, or omit the field if you cannot state a number. "
                     + price_plan_instruction(config)
                     + rating_definitions(config)
-                    + ALLOCATION_INSTRUCTION
+                    + allocation_instruction(config)
                     + NO_EXTERNAL_TOOLS
                     + get_language_instruction(labelled=True)
                 ),

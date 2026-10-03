@@ -52,6 +52,9 @@ def rating_definitions(config=None):
         from tradingagents.dataflows.config import get_config
         config = get_config()
     text = RATING_DEFINITIONS if config.get('rating_timing_decoupled', True) else LEGACY_RATING_DEFINITIONS
+    if config.get('allocation_bands', DEFAULT_ALLOCATION_BANDS) is not None:
+        text = text.replace('不固定映射比例', '配置按allocation_bands区间')
+        text += '\n目标配置须满足allocation_bands区间（见统一配置说明），与入场时机分开。'
     if config.get('rating_probability_fields', True):
         text += '\n' + PROBABILITY_INSTRUCTION
     return text
@@ -157,6 +160,51 @@ PROBABILITY_INSTRUCTION = ('以P=P(20个交易日主口径收益>0)先估计概�
     '缺证据不伪造精度。')
 
 
+DEFAULT_ALLOCATION_BANDS = {
+    'Sell': {'lower':0.,'upper':20.,'lower_inclusive':True,'upper_inclusive':False},
+    'Underweight': {'lower':20.,'upper':80.,'lower_inclusive':True,'upper_inclusive':False},
+    'Hold': {'lower':80.,'upper':120.,'lower_inclusive':True,'upper_inclusive':True},
+    'Overweight': {'lower':120.,'upper':135.,'lower_inclusive':False,'upper_inclusive':True},
+    'Buy': {'lower':135.,'upper':150.,'lower_inclusive':False,'upper_inclusive':True},
+}
+
+
+def allocation_rating(value, bands=DEFAULT_ALLOCATION_BANDS):
+    """只归档，不修正用户输出；None明确关闭。"""
+    import math
+    if bands is None:
+        return None
+    try:
+        value=float(value)
+    except (TypeError,ValueError):
+        return None
+    if not math.isfinite(value):
+        return None
+    for rating,band in bands.items():
+        low=value>=band['lower'] if band.get('lower_inclusive',True) else value>band['lower']
+        high=value<=band['upper'] if band.get('upper_inclusive',True) else value<band['upper']
+        if low and high:
+            return rating
+    return '越界'
+
+
+def allocation_instruction(config=None):
+    """D3 null仅恢复配置提示，不改变其他开关。"""
+    from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION
+    if config is None:
+        from tradingagents.dataflows.config import get_config
+        config=get_config()
+    bands=config.get('allocation_bands',DEFAULT_ALLOCATION_BANDS)
+    if bands is None:
+        return ALLOCATION_INSTRUCTION
+    rows=[]
+    for rating in RATINGS_5_TIER:
+        band=bands[rating]
+        rows.append(f"{rating}：{band['lower']:g} {'≤' if band.get('lower_inclusive',True) else '<'} x {'≤' if band.get('upper_inclusive',True) else '<'} {band['upper']:g}%")
+    return ALLOCATION_INSTRUCTION.replace('目标依证据和风险决定，不把评级固定映射为比例；没有依据可留空。',
+        '配置区间（单标的标准仓位%）：'+'；'.join(rows)+'。证据越强取远离Hold端，财报等风险取接近Hold端；若风险需跨档，应调整评级而非越界。目标为计划完成后量，与等待入场时机分开；没有依据可留空。')
+
+
 def output_flags(payload, config, *, layer):
     """标记矛盾而不改评级/概率/配置；缺字段不补默认。"""
     rating=payload.get('recommendation') or payload.get('action') or payload.get('rating')
@@ -165,6 +213,14 @@ def output_flags(payload, config, *, layer):
     if config.get('rating_probability_fields',True) and layer in ('rm','pm'):
         predicted=probability_rating(payload.get('prob_outperform_20d'))
         flags['rating_prob_mismatch']=bool(predicted is not None and rating is not None and predicted!=rating)
+    bands=config.get('allocation_bands',DEFAULT_ALLOCATION_BANDS)
+    value=payload.get('target_allocation_pct')
+    if bands is not None and value is not None and rating is not None:
+        allocated=allocation_rating(value,bands)
+        if allocated!=rating:
+            band=bands.get(str(rating))
+            interval=f"{'[' if band.get('lower_inclusive',True) else '('}{band['lower']:g}, {band['upper']:g}{']' if band.get('upper_inclusive',True) else ')'}" if band else '未知评级'
+            flags['allocation_flag']=f'{rating} 配 {value:g}% 不在 {interval} 区间（配置归档：{allocated or "不可解析"}）'
     return flags
 
 

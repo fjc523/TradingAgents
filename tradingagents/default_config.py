@@ -96,6 +96,12 @@ def build_default_config() -> dict:
         "cross_ticker_lessons": "stats",
         "price_plan_evaluation_enabled": True,
         "rating_probability_fields": True,
+        "allocation_bands": {
+            "Sell": {"lower":0., "upper":20., "lower_inclusive":True, "upper_inclusive":False},
+            "Underweight": {"lower":20., "upper":80., "lower_inclusive":True, "upper_inclusive":False},
+            "Hold": {"lower":80., "upper":120., "lower_inclusive":True, "upper_inclusive":True},
+            "Overweight": {"lower":120., "upper":135., "lower_inclusive":False, "upper_inclusive":True},
+            "Buy": {"lower":135., "upper":150., "lower_inclusive":False, "upper_inclusive":True}},
         "position_structure_enabled": True,
         "late_news_refresh": False,
         # 价格方案规则，调用项目可覆盖。
