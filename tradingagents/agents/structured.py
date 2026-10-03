@@ -97,3 +97,11 @@ def invoke_structured_or_freetext(
     if result is not None:
         return render(result)
     return plain_llm.invoke(prompt).content
+
+
+def invoke_decision(structured_llm, plain_llm, prompt, render, agent_name):
+    """一次模型返回同时保留真实model_dump；自由文本只返回正文。"""
+    result=invoke_structured(structured_llm, prompt, agent_name)
+    if result is not None:
+        return render(result), result.model_dump(mode='json')
+    return plain_llm.invoke(prompt).content, None

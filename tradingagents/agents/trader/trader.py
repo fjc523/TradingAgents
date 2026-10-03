@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tradingagents.agents.schemas import decision_schema
+
 from langchain_core.messages import AIMessage
 
 from tradingagents.agents.context import (
@@ -15,6 +17,7 @@ from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
     bind_structured,
     invoke_structured_or_freetext,
+    invoke_decision,
 )
 
 
@@ -25,6 +28,7 @@ def create_trader(llm, config=None):
     config = dict(config)
     direction_lock = config.get('risk_layer_direction_lock', True) or config.get('rating_timing_decoupled', True)
     schema = TraderProposal if direction_lock else LegacyTraderProposal
+    schema = decision_schema(schema, config, "trader")
     structured_llm = bind_structured(llm, schema, "Trader")
 
     def trader_node(state):
@@ -96,7 +100,9 @@ def create_trader(llm, config=None):
                 '默认沿用研究经理recommendation。只有研究经理未考虑的可核对新证据才允许改变方向；不能凭盈亏比、入场点不足或笼统风险改变。 ')
             messages[1]['content'] += '\n- **方向变更**：direction_change必填“否”或“是：具体新证据”，包含来源、事实及方向影响。'
 
-        trader_plan = invoke_structured_or_freetext(
+        if config.get("price_plan_evaluation_enabled", True):
+            messages[1]["content"] += "\n输出first_target绝对价格；无可靠第一目标留空，不编造。"
+        trader_plan, structured = invoke_decision(
             structured_llm,
             llm,
             messages,
@@ -107,6 +113,7 @@ def create_trader(llm, config=None):
         return {
             "messages": [AIMessage(content=trader_plan)],
             "trader_investment_plan": trader_plan,
+            "structured_trader_proposal": structured,
         }
 
     return trader_node

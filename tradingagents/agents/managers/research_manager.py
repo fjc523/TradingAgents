@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tradingagents.agents.schemas import decision_schema
+
 from tradingagents.dataflows.social_result import lesson_reference_instruction
 
 from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction, report_or_absent
@@ -11,6 +13,7 @@ from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
     bind_structured,
     invoke_structured_or_freetext,
+    invoke_decision,
 )
 
 
@@ -22,6 +25,7 @@ def create_research_manager(llm, config=None):
     reads_reports = config.get('research_manager_reads_reports', True)
     structured_debate = config.get('debate_mode', 'structured') == 'structured'
     schema = (ResearchPlan if reads_reports else CruxResearchPlan) if structured_debate else (EvidenceResearchPlan if reads_reports else LegacyResearchPlan)
+    schema = decision_schema(schema, config, "rm")
     structured_llm = bind_structured(llm, schema, "Research Manager")
 
     def research_manager_node(state) -> dict:
@@ -91,7 +95,7 @@ Write these sections, in this order, starting with the recommendation on its own
             prompt += '\n先输出3–5个分歧点裁决（cruxes），每项列多方主张、空方主张、决定性报告证据、胜方/未决及理由，再输出评级。不得凭发言顺序判胜负。'
 
         prompt += lesson_reference_instruction(config)
-        investment_plan = invoke_structured_or_freetext(
+        investment_plan, structured = invoke_decision(
             structured_llm,
             llm,
             prompt,
@@ -110,6 +114,7 @@ Write these sections, in this order, starting with the recommendation on its own
         return {
             "investment_debate_state": new_investment_debate_state,
             "investment_plan": investment_plan,
+            "structured_research_plan": structured,
         }
 
     return research_manager_node

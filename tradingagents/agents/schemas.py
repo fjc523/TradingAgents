@@ -21,7 +21,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, create_model
 
 # LLMs sometimes write a placeholder string ("None", "N/A", ...) into an optional
 # numeric field instead of omitting it. Coerce those to None so the structured
@@ -169,7 +169,7 @@ def render_research_plan(plan: ResearchPlan) -> str:
         text = '\n\n'.join(rows) + '\n\n' + text
     if hasattr(plan, 'evidence_check'):
         text += '\n\n**引用核对**: ' + (plan.evidence_check or '未提供；不能视为已核对')
-    return text
+    return text + _probability_lines(plan)
 
 
 # ---------------------------------------------------------------------------
@@ -349,6 +349,8 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
                          ("减仓点位", proposal.reduce_plan)):
         parts.extend(["", f"**{label}**: {value or '未提供；等待可靠行情及条件确认'}"])
     parts.extend(["", f"**目标配置（标准仓位=100%）**: {_allocation_text(proposal.target_allocation_pct)}"])
+    if hasattr(proposal, "first_target"):
+        parts.extend(["", f"**First Target**: {proposal.first_target if proposal.first_target is not None else 'not provided'}"])
     parts.extend([
         "",
         f"FINAL TRANSACTION PROPOSAL: **{proposal.action.value.upper()}**",
@@ -465,10 +467,13 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
     parts.extend(["", f"**目标配置（标准仓位=100%）**: {_allocation_text(decision.target_allocation_pct)}"])
     # Named even when absent: a missing line reads as a field nobody asked for,
     # so a reader cannot tell "no target" from "target not reported".
+    for label, field in (("Stop Loss", "stop_loss"), ("First Target", "first_target")):
+        if hasattr(decision, field):
+            parts.extend(["", f"**{label}**: {getattr(decision, field) if getattr(decision, field) is not None else 'not provided'}"])
     target = decision.price_target if decision.price_target is not None else "not provided"
     parts.extend(["", f"**Price Target**: {target}"])
     parts.extend(["", f"**Time Horizon**: {decision.time_horizon or 'not provided'}"])
-    return "\n".join(parts)
+    return "\n".join(parts) + _probability_lines(decision)
 
 
 # ---------------------------------------------------------------------------
@@ -549,3 +554,65 @@ def render_sentiment_report(report: SentimentReport) -> str:
         "",
         report.narrative,
     ])
+
+
+
+_SCHEMA_BASES = {}
+
+
+def _probability_value(value):
+    """概率缺失不默认0.5；有效数值必须有限且位于0–1。"""
+    import math
+    if isinstance(value,str):
+        value=value.strip()
+        if value.lower() in _NULLISH_FLOAT:
+            return None
+    if value is None:
+        return None
+    try:
+        parsed=float(value)
+    except (ValueError,TypeError):
+        return str(value)
+    if not math.isfinite(parsed) or not 0<=parsed<=1:
+        raise ValueError('概率必须为0–1有限数值或明确缺失文本')
+    return parsed
+
+
+from functools import lru_cache
+
+@lru_cache(maxsize=64)
+def _extended_decision_schema(base, prices, probabilities, layer):
+    """缓存schema类以保持相同开关下工具签名稳定。"""
+    fields={};validators={}
+    if prices and layer!='rm':
+        fields['first_target']=(float | None, Field(default=None, description='第一目标的真实数值；无依据不填，不把price_target当第一目标。'))
+        numeric=['first_target']
+        if layer=='pm':
+            fields['stop_loss']=(float | None, Field(default=None, description='最终方案止损绝对价格，与点位失效价一致；无依据不填。'))
+            numeric.append('stop_loss')
+        validators['_optional_prices']=field_validator(*numeric,mode='before')(classmethod(lambda cls,value:_coerce_optional_float(value)))
+    if not fields:
+        return base
+    return create_model(base.__name__+'OptionalFields',__base__=base,__validators__=validators,**fields)
+
+
+def decision_schema(base, config, layer):
+    """每项关闭恢复旧字段；不顺带关闭其他功能。"""
+    original=_SCHEMA_BASES.get(base,base)
+    return _extended_decision_schema(original,config.get('price_plan_evaluation_enabled',True),config.get('rating_probability_fields',True),layer)
+
+
+def _probability_lines(model):
+    """仅扩展schema实例渲染新增可选字段。"""
+    if not hasattr(model,'prob_outperform_20d'):
+        return ''
+    return ''.join('\n\n**'+label+'**: '+str(getattr(model,field) if getattr(model,field) is not None else '未提供')
+        for label,field in [('Prob Outperform 5d','prob_outperform_5d'),('Prob Outperform 20d','prob_outperform_20d'),('Expected Return 20d Range','expected_return_20d_range')])
+
+
+# 公共新schema包含可选字段，关闭配置仍选其原类；旧加载不要求新增字段。
+for _name,_layer in [('ResearchPlan','rm'),('TraderProposal','trader'),('PortfolioDecision','pm')]:
+    _base=globals()[_name]
+    _new=decision_schema(_base,{},_layer)
+    _SCHEMA_BASES[_new]=_base
+    globals()[_name]=_new

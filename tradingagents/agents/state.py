@@ -44,6 +44,9 @@ class RiskDebateState(TypedDict):
 
 class AgentState(MessagesState):
     company_name: str
+    structured_research_plan: dict | None
+    structured_trader_proposal: dict | None
+    structured_pm_decision: dict | None
     instrument_context_full: str
     instrument_context_brief: str
     context_compaction: bool

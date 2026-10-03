@@ -10,6 +10,8 @@ free-text generation and the rating is read from that text.
 
 from __future__ import annotations
 
+from tradingagents.agents.schemas import decision_schema
+
 from tradingagents.dataflows.social_result import lesson_reference_instruction
 
 from tradingagents.dataflows.social_result import social_absence_instruction
@@ -33,6 +35,7 @@ def create_portfolio_manager(llm, config=None):
     config = dict(config)
     direction_lock = config.get('risk_layer_direction_lock', True) or config.get('rating_timing_decoupled', True)
     schema = PortfolioDecision if direction_lock else LegacyPortfolioDecision
+    schema = decision_schema(schema, config, "pm")
     structured_llm = bind_structured(llm, schema, "Portfolio Manager")
 
     def portfolio_manager_node(state) -> dict:
@@ -122,13 +125,15 @@ Write these sections, in this order, starting with the rating on its own line:
 - **方向变更**：direction_change必填“否”或“是：具体新证据”
 {NO_EXTERNAL_TOOLS}{get_language_instruction(labelled=True)}"""
 
+        if config.get("price_plan_evaluation_enabled", True):
+            prompt += "\n输出可选stop_loss与first_target绝对价格，保留点位依据；无可靠值留空，不将模糊目标当第一目标。"
         if config.get('rating_timing_decoupled', True):
             prompt += '\nBuy/Overweight没有合格入场点时保持评级；entry_plan首句写“不适用：等待回踩至 X 或突破 Y 确认”，X/Y均为输入中的具体回踩价和突破价；缺锚点须明确说明缺失，不能编造价位。'
 
         # The typed rating is the decision; the rendered text only carries it.
         # Read back from text, a rating the thesis quotes could replace it.
-        prompt += social_absence_instruction(config)
         prompt += lesson_reference_instruction(config)
+        prompt += social_absence_instruction(config)
         decision = invoke_structured(structured_llm, prompt, "Portfolio Manager")
         if decision is not None:
             final_trade_decision = render_pm_decision(decision)
@@ -152,6 +157,7 @@ Write these sections, in this order, starting with the rating on its own line:
         return {
             "risk_debate_state": new_risk_debate_state,
             "final_trade_decision": final_trade_decision,
+            "structured_pm_decision": decision.model_dump(mode="json") if decision is not None else None,
             "final_rating": final_rating,
         }
 
