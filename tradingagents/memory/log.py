@@ -1,6 +1,10 @@
 """The memory log: an append-only markdown record of each decision and, once settled, its outcome."""
 
 import re
+import json
+import hashlib
+import math
+from collections import defaultdict
 from pathlib import Path
 
 from tradingagents.agents.rating import parse_rating
@@ -25,6 +29,9 @@ class TradingMemoryLog:
             self._log_path.parent.mkdir(parents=True, exist_ok=True)
         # Optional cap on resolved entries. None disables rotation.
         self._max_entries = cfg.get("memory_log_max_entries")
+        self._lesson_min = cfg.get("lesson_min_settled_same_ticker", 10)
+        self._cross_lessons = cfg.get("cross_ticker_lessons", "stats")
+        self._outcomes_path = cfg.get("evaluation_outcomes_path")
 
     # --- Write: a run records its decision ---
 
@@ -89,6 +96,8 @@ class TradingMemoryLog:
         outcomes that had not happened yet (#1251). ``as_of=None`` disables the
         filter, so live runs and pre-migration entries are unaffected.
         """
+        if not (self._lesson_min == 0 and self._cross_lessons == "text"):
+            return self._factual_context(ticker, n_same=n_same, n_cross=n_cross, as_of=as_of)
         entries = [e for e in self.load_entries() if not e.get("pending")]
         if as_of is not None:
             entries = [e for e in entries if e.get("resolved") and e["resolved"] <= as_of]
@@ -115,6 +124,93 @@ class TradingMemoryLog:
             parts.append("Recent cross-ticker lessons:")
             parts.extend(self._format_reflection_only(e) for e in cross)
         return "\n\n".join(parts)
+
+    @staticmethod
+    def _return_number(value):
+        """旧标签百分比与C2有限小数均明确读取。"""
+        try:
+            parsed = float(value.rstrip('%')) / 100 if isinstance(value, str) and value.endswith('%') else float(value)
+            return parsed if math.isfinite(parsed) else None
+        except (TypeError, ValueError):
+            return None
+
+    def _visible_facts(self, as_of):
+        """C2主收益优先，旧memory事实保留标识，不改任何落盘。"""
+        entries = [dict(entry) for entry in self.load_entries() if not entry.get('pending') and (as_of is None or (entry.get('resolved') and entry['resolved'] <= as_of))]
+        facts = {}
+        for entry in entries:
+            entry['returns'] = {'5': self._return_number(entry.get('alpha'))}
+            entry['basis'] = '旧memory 5日alpha（未证明与C2主口径一致）'
+            facts[(entry['date'], entry['ticker'])] = entry
+        if self._outcomes_path and Path(self._outcomes_path).exists():
+            try:
+                outcomes = [json.loads(line) for line in Path(self._outcomes_path).read_text(encoding='utf-8').splitlines() if line.strip()]
+            except (OSError, ValueError):
+                # 损坏的独立评估不能变成伪造事实；仍保留旧memory的明确口径。
+                outcomes = []
+            for row in outcomes:
+                if not row.get('is_current'):
+                    continue
+                visible = {}
+                for days, window in row.get('windows', {}).items():
+                    known = str(window.get('settled_at') or '')[:10]
+                    if window.get('status') == 'settled' and (as_of is None or (known and known <= as_of)):
+                        value = self._return_number(window.get('primary_return'))
+                        if value is not None:
+                            visible[str(days)] = value
+                if not visible:
+                    continue
+                key=(row['trade_date'], row['symbol'])
+                old=facts.get(key, {})
+                same_identity=bool(old.get('decision') and row.get('decision_fingerprint') == hashlib.sha256(old['decision'].encode('utf-8')).hexdigest())
+                facts[key]={**old, 'date':row['trade_date'], 'ticker':row['symbol'], 'rating':row.get('ratings',{}).get('pm') or '未提供',
+                            'returns':visible, 'basis':'C2 '+str(row.get('primary_metric') or '未提供'), 'reflection':old.get('reflection','') if same_identity else '', 'reflection_association':'精确决策正文一致' if same_identity else '反思关联不可得（C2 current与旧memory决策身份未核验）'}
+        return sorted(facts.values(), key=lambda entry: (entry['date'], entry['ticker']))
+
+    def _factual_context(self, ticker, *, n_same, n_cross, as_of):
+        """门槛按全量可见样本统计，展示截断不影响n。"""
+        entries=self._visible_facts(as_of)
+        same=[entry for entry in entries if entry['ticker']==ticker]
+        cross=[entry for entry in entries if entry['ticker']!=ticker]
+        parts=[]
+        if same:
+            n=len(same)
+            parts.append(f'{ticker}历史事实：样本 {n} 条，'+('不足以形成规律，仅供参考' if n<self._lesson_min else '历史记录仅供参考'))
+            table=['|日期|PM评级|5日主收益|10日主收益|20日主收益|口径|','|---|---|---|---|---|---|']
+            for entry in reversed(same[-n_same:] if n_same else []):
+                values=[f"{entry['returns'][day]:+.2%}" if day in entry['returns'] else '未成熟/不可得' for day in ('5','10','20')]
+                table.append('|'+ '|'.join([entry['date'], entry['rating'], *values, entry['basis']])+'|')
+            parts.append('\n'.join(table))
+            if any(entry.get('reflection_association','').startswith('反思关联不可得') for entry in same):
+                parts.append('反思关联不可得：当前C2决策与旧memory无可核验一致身份，不注入旧反思。')
+            if n>=self._lesson_min:
+                directional=[]
+                for entry in same:
+                    value=entry['returns'].get('5')
+                    sign=1 if entry['rating'] in ('Buy','Overweight') else -1 if entry['rating'] in ('Underweight','Sell') else 0
+                    if value is not None and sign:
+                        directional.append(value*sign>0)
+                parts.append(f'方向命中率（可用5日主口径；Hold不计）：{sum(directional)/len(directional):.1%}，n={len(directional)}' if directional else '方向命中率：没有可用方向样本')
+                reflections=[entry for entry in same if entry.get('reflection')][-3:]
+                parts.extend(f"[{entry['date']} | {entry['ticker']}]\nREFLECTION:\n{entry['reflection']}" for entry in reversed(reflections))
+        if self._cross_lessons=='text':
+            legacy_cross=[entry for entry in self.load_entries() if not entry.get('pending') and entry['ticker'] != ticker and (as_of is None or (entry.get('resolved') and entry['resolved'] <= as_of))]
+            if legacy_cross:
+                parts.append('Recent cross-ticker lessons:')
+                parts.extend(self._format_reflection_only(entry) for entry in reversed(legacy_cross[-n_cross:]) if n_cross)
+        elif self._cross_lessons=='stats' and entries:
+            # 不混合旧alpha与C2绝对/超额，按评级及明确主口径分组。
+            groups=defaultdict(list)
+            for entry in entries:
+                value=entry['returns'].get('5')
+                if value is not None:
+                    groups[(entry['rating'],entry['basis'])].append(value)
+            table=['全体决策统计（按评级与口径；历史记录仅供参考）：','|PM评级|主口径|5日平均收益|n|','|---|---|---|---|']
+            for (rating,basis),values in sorted(groups.items()):
+                table.append(f'|{rating}|{basis}|{sum(values)/len(values):+.2%}|{len(values)}|')
+            parts.append('\n'.join(table))
+        return '\n\n'.join(parts)
+
 
     # --- Settle: record a decision's outcome and reflection ---
 

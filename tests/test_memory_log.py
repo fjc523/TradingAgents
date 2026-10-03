@@ -32,7 +32,7 @@ DECISION_NO_RATING = (
 # ---------------------------------------------------------------------------
 
 def make_log(tmp_path, filename="trading_memory.md"):
-    config = {"memory_log_path": str(tmp_path / filename)}
+    config = {"memory_log_path": str(tmp_path / filename), "lesson_min_settled_same_ticker":0, "cross_ticker_lessons":"text"}
     return TradingMemoryLog(config)
 
 

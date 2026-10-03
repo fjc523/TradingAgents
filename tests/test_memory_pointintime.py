@@ -14,7 +14,7 @@ from tradingagents.memory import TradingMemoryLog
 
 
 def _log(tmp_path):
-    return TradingMemoryLog({"memory_log_path": str(tmp_path / "mem.md")})
+    return TradingMemoryLog({"memory_log_path": str(tmp_path / "mem.md"), "lesson_min_settled_same_ticker":0, "cross_ticker_lessons":"text"})
 
 
 def _resolve(log, ticker, date, resolution_date, reflection):

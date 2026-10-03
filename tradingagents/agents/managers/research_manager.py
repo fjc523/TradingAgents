@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tradingagents.dataflows.social_result import lesson_reference_instruction
+
 from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction, report_or_absent
 from tradingagents.agents.rating import rating_definitions
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, ResearchPlan, LegacyResearchPlan, EvidenceResearchPlan, CruxResearchPlan, render_research_plan
@@ -88,6 +90,7 @@ Write these sections, in this order, starting with the recommendation on its own
             prompt = prompt.replace('starting with the recommendation on its own line:', 'starting with 3–5 evidence-based cruxes, then the recommendation:')
             prompt += '\n先输出3–5个分歧点裁决（cruxes），每项列多方主张、空方主张、决定性报告证据、胜方/未决及理由，再输出评级。不得凭发言顺序判胜负。'
 
+        prompt += lesson_reference_instruction(config)
         investment_plan = invoke_structured_or_freetext(
             structured_llm,
             llm,
