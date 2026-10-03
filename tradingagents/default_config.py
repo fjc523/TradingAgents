@@ -91,6 +91,7 @@ def build_default_config() -> dict:
     """
     return _apply_env_overrides({
         "earnings_expectations_enabled": True,
+        "position_structure_enabled": True,
         "late_news_refresh": False,
         # 价格方案规则，调用项目可覆盖。
         "price_plan_stop_atr_min": 1.0,
