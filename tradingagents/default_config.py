@@ -90,6 +90,7 @@ def build_default_config() -> dict:
     the environment as it is now.
     """
     return _apply_env_overrides({
+        "earnings_expectations_enabled": True,
         "late_news_refresh": False,
         # 价格方案规则，调用项目可覆盖。
         "price_plan_stop_atr_min": 1.0,
@@ -197,6 +198,7 @@ def build_default_config() -> dict:
         },
         # Tool-level configuration (takes precedence over category-level)
         "tool_vendors": {
+            "get_earnings_expectations": "yfinance",
             # Example: "get_stock_data": "alpha_vantage",  # Override category default
         },
         # Benchmark for alpha calculation in the reflection layer.

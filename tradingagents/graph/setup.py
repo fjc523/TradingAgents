@@ -139,11 +139,14 @@ class GraphSetup:
         from tradingagents.agents.analysts.news_analyst import available_news_tools
         plan = replace(plan, specs=[replace(spec, tools=available_news_tools()) if spec.key == "news" else spec for spec in plan.specs])
 
+        from tradingagents.agents.analysts.fundamentals_analyst import available_tools
+        plan = replace(plan, specs=[replace(spec, tools=available_tools(self.config)) if spec.key == "fundamentals" else spec for spec in plan.specs])
+
         analyst_factories = {
             "market": lambda: create_market_analyst(self.quick_thinking_llm),
             "social": lambda: create_sentiment_analyst(self.quick_thinking_llm),
             "news": lambda: create_news_analyst(self.quick_thinking_llm),
-            "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm),
+            "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm, self.config),
         }
 
         bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)

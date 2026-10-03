@@ -282,3 +282,16 @@ def get_prediction_markets(
         str: A formatted markdown report of matching prediction markets
     """
     return route_to_vendor("get_prediction_markets", topic, limit, trade_date or None)
+
+
+@tool
+def get_earnings_expectations(
+    ticker: Annotated[str, InjectedState("company_of_interest")],
+    curr_date: Annotated[str, "分析日期，YYYY-MM-DD"],
+    trade_date: Annotated[str, InjectedState("trade_date")] = "",
+    asset_type: Annotated[str, InjectedState("asset_type")] = "stock",
+) -> str:
+    """取得个股当前EPS/营收一致预期、预期修正、业绩惊喜及下次财报日。"""
+    if asset_type != "stock":
+        return "不适用：ETF与指数不查询公司一致预期"
+    return route_to_vendor("get_earnings_expectations", ticker, as_of(curr_date, trade_date))

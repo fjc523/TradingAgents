@@ -45,6 +45,8 @@ from tradingagents.dataflows.vendors.yahoo.market import (
 )
 from tradingagents.dataflows.vendors.yahoo.news import get_global_news_yfinance, get_news_yfinance
 
+from tradingagents.dataflows.vendors.yahoo.expectations import get_earnings_expectations
+
 logger = logging.getLogger(__name__)
 
 # Tools organized by category
@@ -67,7 +69,8 @@ TOOLS_CATEGORIES = {
             "get_fundamentals",
             "get_balance_sheet",
             "get_cashflow",
-            "get_income_statement"
+            "get_income_statement",
+            "get_earnings_expectations"
         ]
     },
     "news_data": {
@@ -104,6 +107,7 @@ from tradingagents.dataflows.ohlcv_sources import stock_data_for_source, indicat
 
 # Mapping of methods to their vendor-specific implementations
 VENDOR_METHODS = {
+    "get_earnings_expectations": {"yfinance": get_earnings_expectations},
     # core_stock_apis
     "get_stock_data": {
         "alpaca": partial(stock_data_for_source, "alpaca"),
