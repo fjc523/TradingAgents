@@ -23,7 +23,7 @@ from tradingagents.agents.context import (
     get_language_instruction,
     get_portfolio_context_from_state,
 )
-from tradingagents.agents.rating import rating_definitions, parse_rating
+from tradingagents.agents.rating import rating_definitions, output_flags, flags_for_text, parse_rating
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, price_plan_instruction, PortfolioDecision, LegacyPortfolioDecision, render_pm_decision
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS, bind_structured, invoke_structured
 
@@ -132,6 +132,8 @@ Write these sections, in this order, starting with the rating on its own line:
 
         # The typed rating is the decision; the rendered text only carries it.
         # Read back from text, a rating the thesis quotes could replace it.
+        if config.get("rating_probability_fields", True):
+            prompt += "\n输出可选prob_outperform_5d、prob_outperform_20d（0–1）与expected_return_20d_range，每项单列；证据不足明确未知。"
         prompt += lesson_reference_instruction(config)
         prompt += social_absence_instruction(config)
         decision = invoke_structured(structured_llm, prompt, "Portfolio Manager")
@@ -158,6 +160,7 @@ Write these sections, in this order, starting with the rating on its own line:
             "risk_debate_state": new_risk_debate_state,
             "final_trade_decision": final_trade_decision,
             "structured_pm_decision": decision.model_dump(mode="json") if decision is not None else None,
+            "decision_flags": {**state.get("decision_flags", {}), "pm": output_flags(decision.model_dump(mode="json"),config,layer="pm") if decision is not None else flags_for_text(final_trade_decision,config,layer="pm")},
             "final_rating": final_rating,
         }
 

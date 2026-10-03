@@ -43,6 +43,7 @@ class RiskDebateState(TypedDict):
 
 
 class AgentState(MessagesState):
+    decision_flags: dict
     company_name: str
     structured_research_plan: dict | None
     structured_trader_proposal: dict | None

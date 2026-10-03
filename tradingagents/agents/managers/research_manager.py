@@ -7,7 +7,7 @@ from tradingagents.agents.schemas import decision_schema
 from tradingagents.dataflows.social_result import lesson_reference_instruction
 
 from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction, report_or_absent
-from tradingagents.agents.rating import rating_definitions
+from tradingagents.agents.rating import rating_definitions, output_flags, flags_for_text
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, ResearchPlan, LegacyResearchPlan, EvidenceResearchPlan, CruxResearchPlan, render_research_plan
 from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
@@ -94,6 +94,8 @@ Write these sections, in this order, starting with the recommendation on its own
             prompt = prompt.replace('starting with the recommendation on its own line:', 'starting with 3–5 evidence-based cruxes, then the recommendation:')
             prompt += '\n先输出3–5个分歧点裁决（cruxes），每项列多方主张、空方主张、决定性报告证据、胜方/未决及理由，再输出评级。不得凭发言顺序判胜负。'
 
+        if config.get("rating_probability_fields", True):
+            prompt += "\n输出可选prob_outperform_5d、prob_outperform_20d（0–1）与expected_return_20d_range，每项单列；证据不足明确未知。"
         prompt += lesson_reference_instruction(config)
         investment_plan, structured = invoke_decision(
             structured_llm,
@@ -115,6 +117,7 @@ Write these sections, in this order, starting with the recommendation on its own
             "investment_debate_state": new_investment_debate_state,
             "investment_plan": investment_plan,
             "structured_research_plan": structured,
+            "decision_flags": {**state.get("decision_flags", {}), "rm": output_flags(structured,config,layer="rm") if structured is not None else flags_for_text(investment_plan,config,layer="rm")},
         }
 
     return research_manager_node

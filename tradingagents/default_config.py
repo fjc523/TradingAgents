@@ -95,6 +95,7 @@ def build_default_config() -> dict:
         "lesson_min_settled_same_ticker": 10,
         "cross_ticker_lessons": "stats",
         "price_plan_evaluation_enabled": True,
+        "rating_probability_fields": True,
         "position_structure_enabled": True,
         "late_news_refresh": False,
         # 价格方案规则，调用项目可覆盖。

@@ -11,7 +11,7 @@ from tradingagents.agents.context import (
     get_language_instruction,
     get_portfolio_context_from_state,
 )
-from tradingagents.agents.rating import rating_definitions
+from tradingagents.agents.rating import rating_definitions, output_flags, flags_for_text
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, price_plan_instruction, TraderProposal, LegacyTraderProposal, render_trader_proposal
 from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
@@ -114,6 +114,7 @@ def create_trader(llm, config=None):
             "messages": [AIMessage(content=trader_plan)],
             "trader_investment_plan": trader_plan,
             "structured_trader_proposal": structured,
+            "decision_flags": {**state.get("decision_flags", {}), "trader": output_flags(structured,config,layer="trader") if structured is not None else flags_for_text(trader_plan,config,layer="trader")},
         }
 
     return trader_node

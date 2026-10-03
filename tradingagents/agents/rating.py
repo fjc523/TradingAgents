@@ -51,7 +51,10 @@ def rating_definitions(config=None):
     if config is None:
         from tradingagents.dataflows.config import get_config
         config = get_config()
-    return RATING_DEFINITIONS if config.get('rating_timing_decoupled', True) else LEGACY_RATING_DEFINITIONS
+    text = RATING_DEFINITIONS if config.get('rating_timing_decoupled', True) else LEGACY_RATING_DEFINITIONS
+    if config.get('rating_probability_fields', True):
+        text += '\n' + PROBABILITY_INSTRUCTION
+    return text
 
 
 # Signal emitted when the model's decision has no recognizable rating. It is not
@@ -135,3 +138,43 @@ def run_rating(final_state: dict) -> str:
 def is_review(signal: str) -> bool:
     """Whether a signal is the non-tradeable REVIEW sentinel (#1170)."""
     return signal == RATING_REVIEW
+
+
+def probability_rating(value):
+    """用户确认的20日主口径跑赢概率边界；缺值不归档。"""
+    import math
+    try:
+        probability=float(value)
+    except (ValueError,TypeError):
+        return None
+    if not math.isfinite(probability) or not 0<=probability<=1:
+        return None
+    return 'Buy' if probability>=.65 else 'Overweight' if probability>=.55 else 'Hold' if probability>=.45 else 'Underweight' if probability>=.35 else 'Sell'
+
+
+PROBABILITY_INSTRUCTION = ('以P=P(20个交易日主口径收益>0)先估计概率再选评级：Buy P≥0.65；Overweight 0.55≤P<0.65；Hold 0.45≤P<0.55；Underweight 0.35≤P<0.45；Sell P<0.35。'
+    '个股/行业ETF主口径为对SPY超额，宽基/指数为绝对收益；概率反映不确定性，证据薄弱向0.5收缩。'
+    '缺证据不伪造精度。')
+
+
+def output_flags(payload, config, *, layer):
+    """标记矛盾而不改评级/概率/配置；缺字段不补默认。"""
+    rating=payload.get('recommendation') or payload.get('action') or payload.get('rating')
+    rating=getattr(rating,'value',rating)
+    flags={}
+    if config.get('rating_probability_fields',True) and layer in ('rm','pm'):
+        predicted=probability_rating(payload.get('prob_outperform_20d'))
+        flags['rating_prob_mismatch']=bool(predicted is not None and rating is not None and predicted!=rating)
+    return flags
+
+
+def flags_for_text(text,config,*,layer):
+    """自由文本只解析明确标签，仍不伪称结构化模型输出。"""
+    label='Recommendation' if layer=='rm' else 'Action' if layer=='trader' else 'Rating'
+    match=re.search(r'(?mi)^\s*\*\*'+label+r'\*\*\s*[:：]\s*(Buy|Overweight|Hold|Underweight|Sell)\b',str(text or ''))
+    payload={'rating':match[1] if match else None}
+    allocation=re.search(r'\*\*目标配置（标准仓位=100%）\*\*\s*[:：]\s*([-+]?[0-9]+(?:\.[0-9]+)?)\s*%',str(text or ''))
+    if allocation:payload['target_allocation_pct']=float(allocation[1])
+    probability=re.search(r'(?mi)^\s*\*\*Prob Outperform 20d\*\*\s*[:：]\s*([01](?:\.\d+)?)\s*$',str(text or ''))
+    if probability:payload['prob_outperform_20d']=float(probability[1])
+    return output_flags(payload,config,layer=layer)

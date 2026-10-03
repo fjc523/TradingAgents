@@ -591,6 +591,11 @@ def _extended_decision_schema(base, prices, probabilities, layer):
             fields['stop_loss']=(float | None, Field(default=None, description='最终方案止损绝对价格，与点位失效价一致；无依据不填。'))
             numeric.append('stop_loss')
         validators['_optional_prices']=field_validator(*numeric,mode='before')(classmethod(lambda cls,value:_coerce_optional_float(value)))
+    if probabilities and layer in ('rm','pm'):
+        for field in ('prob_outperform_5d','prob_outperform_20d'):
+            fields[field]=(float | str | None, Field(default=None, description='对应交易日窗口主口径收益>0的概率0–1；未知可用明确文字，不默认0.5。'))
+        fields['expected_return_20d_range']=(str | None,Field(default=None,description='20交易日主口径预期收益区间，例如−2% ~ +5%；证据不足不编造。'))
+        validators['_probabilities']=field_validator('prob_outperform_5d','prob_outperform_20d',mode='before')(classmethod(lambda cls,value:_probability_value(value)))
     if not fields:
         return base
     return create_model(base.__name__+'OptionalFields',__base__=base,__validators__=validators,**fields)
