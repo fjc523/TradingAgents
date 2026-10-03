@@ -56,3 +56,12 @@ class VendorNotConfiguredError(VendorError, ValueError):
     Also a ``ValueError`` so existing callers that catch ``ValueError`` keep
     working while the routing layer can treat it as "vendor unavailable".
     """
+
+
+class StaleVendorDataError(VendorUnavailableError):
+    """合法旧报表无法覆盖已公开申报；保留原表供可信后备失败时警示返回。"""
+    def __init__(self, message, *, original_text, statement_metadata, minimum_period):
+        super().__init__(message)
+        self.original_text = original_text
+        self.statement_metadata = statement_metadata
+        self.minimum_period = minimum_period

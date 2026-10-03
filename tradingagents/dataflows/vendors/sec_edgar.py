@@ -21,19 +21,23 @@ import json
 import logging
 import os
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import requests
 
 from tradingagents import __version__
 from tradingagents.dataflows.config import get_config
-from tradingagents.dataflows.errors import NoMarketDataError, VendorUnavailableError
+from tradingagents.dataflows.errors import NoMarketDataError, VendorUnavailableError, StaleVendorDataError
+from tradingagents.dataflows.statement_freshness import StatementResult
 from tradingagents.dataflows.files import replace_file
 
 logger = logging.getLogger(__name__)
 
 _TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
+_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
+_SUBMISSIONS_ARCHIVE_URL = "https://data.sec.gov/submissions/{name}"
+
 _FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 
 # A filing history only changes when something new is filed, so one fetch per
@@ -142,6 +146,74 @@ def cik_for(ticker: str) -> str | None:
     return None
 
 
+def _submission_rows(table, as_of_date):
+    """必需日期列对齐且合法；非周期申报允许空reportDate，但不能缺filingDate。"""
+    if not isinstance(table, dict) or not isinstance(table.get('form'), list):
+        raise VendorUnavailableError('SEC submissions列式表结构非法')
+    forms = table['form']
+    for key in ('filingDate', 'reportDate'):
+        values = table.get(key, [] if not forms else None)
+        if not isinstance(values, list) or len(values) != len(forms):
+            raise VendorUnavailableError(f'SEC submissions必需日期列{key}缺失、类型错误或长度不对齐')
+    rows = []
+    for i, form in enumerate(forms):
+        row = {key: values[i] for key, values in table.items() if isinstance(values, list) and i < len(values)}
+        try:
+            filed = date.fromisoformat(row['filingDate'])
+            report = row['reportDate']
+            if form in ('10-Q', '10-K') or report:
+                report_date = date.fromisoformat(report)
+                if form in ('10-Q', '10-K') and report_date > filed:
+                    raise ValueError('报告期晚于提交日')
+        except (ValueError, KeyError, TypeError) as exc:
+            raise VendorUnavailableError('SEC submissions必需日期值非法') from exc
+        if filed <= date.fromisoformat(as_of_date):
+            rows.append(row)
+    return rows
+
+
+def _latest_filing(cik, as_of_date, forms=('10-Q', '10-K')):
+    payload = _cached_json(_SUBMISSIONS_URL.format(cik=cik), f'submissions_CIK{cik}.json')
+    if not isinstance(payload, dict):
+        raise VendorUnavailableError('SEC submissions根结构非法')
+    filings = payload.get('filings')
+    if not isinstance(filings, dict) or not isinstance(filings.get('recent'), dict):
+        raise VendorUnavailableError('SEC submissions缺少filings.recent列式数据')
+    rows = _submission_rows(filings['recent'], as_of_date)
+    candidates = [row for row in rows if row.get('form') in forms and row.get('reportDate')]
+    # 历史截止早于recent覆盖时，只补取可能包含历史申报的官方归档。
+    if not candidates:
+        files = filings.get('files', [])
+        if not isinstance(files, list) or any(not isinstance(row, dict) for row in files):
+            raise VendorUnavailableError('SEC submissions归档目录结构非法')
+        archives = sorted(files, key=lambda row: row.get('filingTo', ''), reverse=True)
+        for archive in archives:
+            if archive.get('filingFrom', '') > as_of_date or not archive.get('name'):
+                continue
+            name = archive['name']
+            table = _cached_json(_SUBMISSIONS_ARCHIVE_URL.format(name=name), f'submissions_{name}')
+            old = _submission_rows(table, as_of_date)
+            rows.extend(old)
+            candidates.extend(row for row in old if row.get('form') in forms and row.get('reportDate'))
+            if candidates:
+                break
+    if not candidates:
+        return None
+    latest = max(candidates, key=lambda row: (row['filingDate'], row['reportDate']))
+    result = {key: latest[key] for key in ('form', 'reportDate', 'filingDate')}
+    # Item 2.02只能证明财报发布8-K申报日，明确不等同推测的财报召开时间。
+    earnings = [row['filingDate'] for row in rows if row.get('form') == '8-K'
+                and '2.02' in {item.strip() for item in str(row.get('items', '')).split(',')}]
+    if earnings:
+        result['last_earnings_filing_date'] = max(earnings)
+    return result
+
+
+def latest_periodic_filing(cik, as_of_date):
+    """分析截止前已申报的最新10-Q/10-K；不读未来申报。"""
+    return _latest_filing(str(cik).zfill(10), as_of_date)
+
+
 def _span_index(fact: dict, spans: tuple[tuple[int, int], ...]) -> int | None:
     """Which of ``spans`` a duration fact covers (0 for an instant fact), or None."""
     if "start" not in fact:
@@ -234,7 +306,48 @@ def _statement(kind: str, ticker: str, freq: str, as_of_date: str, title: str) -
             value = values.get((end, index)) if chosen[label].get(end) == index else None
             cells.append("" if value is None else f"{value / 1e6:.0f}" if unit == "USD" else f"{value:.2f}")
         rows.append(",".join([name] + cells))
-    return header + "\n".join(rows) + "\n"
+    text = header + "\n".join(rows) + "\n"
+    latest_period = max(end for end, _ in periods)
+    metadata = {'actual_source': 'sec_edgar', 'latest_period': latest_period,
+                'stale': False, 'reason': '', 'as_of_date': as_of_date}
+    filing, unavailable = None, None
+    try:
+        filing = latest_periodic_filing(cik, as_of_date) if quarterly else _latest_filing(cik, as_of_date, ('10-K',))
+    except VendorUnavailableError as exc:
+        unavailable = str(exc)
+    expected = filing['reportDate'] if filing else None
+    if filing:
+        metadata.update(expected_period=expected, filing_date=filing['filingDate'], filing_form=filing['form'])
+        if filing.get('last_earnings_filing_date'):
+            metadata['last_earnings_filing_date'] = filing['last_earnings_filing_date']
+            text = f"# 上次财报发布8-K申报日：{filing['last_earnings_filing_date']}（Item 2.02）\n" + text
+    annual_covered = False
+    if quarterly and filing and filing['form'] == '10-K' and latest_period < expected and kind != 'balance_sheet':
+        # 同一报表自己的年度事实才证明已收录10-K；绝不借无关tag免陈旧。
+        annual_periods = []
+        for _, tags in _STATEMENTS[kind]:
+            values, _ = _as_of(us_gaap, tags, as_of_date, (_SPANS['annual'],), _ANNUAL_FORMS)
+            annual_periods.extend(end for end, _ in values)
+        annual_covered = bool(annual_periods and max(annual_periods) >= expected)
+        if annual_covered:
+            metadata['annual_covered_period'] = expected
+            metadata['reason'] = f'年度申报{expected}已收录，第四季度未单列，不推算Q4；季度表体截至{latest_period}'
+            text = f"# {metadata['reason']}\n" + text
+    age = (date.fromisoformat(as_of_date) - date.fromisoformat(latest_period)).days
+    stale = bool(expected and latest_period < expected and not annual_covered) or bool(unavailable and age > 135)
+    if stale:
+        if expected:
+            reason = f"SEC XBRL汇总未收录{filing['form']} {expected}（{filing['filingDate']}提交），表体截至{latest_period}"
+            minimum_period = expected
+        else:
+            reason = f'SEC submissions不可用（{unavailable}）；表体期末{latest_period}距分析日{age}天，超过135天，最新申报无法核验'
+            minimum_period = (date.fromisoformat(as_of_date) - timedelta(days=135)).isoformat()
+        metadata.update(stale=True, reason=reason)
+        raise StaleVendorDataError(reason, original_text=text, statement_metadata=metadata, minimum_period=minimum_period)
+    if unavailable:
+        metadata['reason'] = f'SEC submissions不可用（{unavailable}）；表体期末{latest_period}距分析日{age}天，未超过135天；最新申报未核验'
+        text = f"# {metadata['reason']}\n" + text
+    return StatementResult(text, metadata)
 
 
 def get_balance_sheet(ticker: str, freq: str = "quarterly", as_of_date: str | None = None) -> str:

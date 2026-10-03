@@ -6,6 +6,7 @@ from tradingagents.dataflows.errors import (
     NoMarketDataError,
     VendorNotConfiguredError,
     VendorUnavailableError,
+    StaleVendorDataError,
 )
 from tradingagents.dataflows.vendors.alpha_vantage import (
     get_balance_sheet as get_alpha_vantage_balance_sheet,
@@ -238,6 +239,8 @@ def route_to_vendor(method: str, *args, **kwargs):
     else:
         vendor_chain = all_available_vendors
 
+    stale_statement = None
+    statement_methods = {"get_balance_sheet", "get_income_statement", "get_cashflow"}
     last_no_data: NoMarketDataError | None = None
     last_unavailable: VendorUnavailableError | None = None
     failed: Exception | None = None     # a vendor that raised something untyped
@@ -246,8 +249,36 @@ def route_to_vendor(method: str, *args, **kwargs):
         vendor_impl = VENDOR_METHODS[method][vendor]
         impl_func = vendor_impl[0] if isinstance(vendor_impl, list) else vendor_impl
 
+        def checked_statement(*call_args, **call_kwargs):
+            value = impl_func(*call_args, **call_kwargs)
+            if method not in statement_methods:
+                return value
+            from tradingagents.dataflows.statement_freshness import StatementResult, latest_statement_period
+            latest = latest_statement_period(value)
+            if 'data is withheld for this date' in str(value):
+                raise VendorUnavailableError('财报后备来源缺少历史申报时点，PIT防护已拒绝当前报表')
+            if stale_statement is not None:
+                if latest is None or latest < stale_statement.minimum_period:
+                    raise VendorUnavailableError(f'财报后备期末{latest or "未核验"}未达到应有期/时效边界{stale_statement.minimum_period}')
+                as_of = stale_statement.statement_metadata['as_of_date']
+                if latest > as_of:
+                    raise VendorUnavailableError(f'财报后备期末{latest}晚于分析截止{as_of}')
+                metadata = {**stale_statement.statement_metadata, 'actual_source': vendor,
+                            'latest_period': latest, 'stale': False,
+                            'reason': '已回退：' + str(stale_statement)}
+                header = f'# 财报来源：{vendor}；最新表体期末：{latest}；回退原因：{stale_statement}\n'
+                return StatementResult(header + str(value), metadata)
+            metadata = getattr(value, 'statement_metadata', None) or {
+                'actual_source': vendor, 'latest_period': latest, 'stale': False, 'reason': ''}
+            return StatementResult(value, metadata)
+
         try:
-            return observed_call(method, vendor, impl_func, *args, observation_symbol=args[0] if args else kwargs.get("ticker"), **kwargs)
+            return observed_call(method, vendor, checked_statement, *args, observation_symbol=args[0] if args else kwargs.get("ticker"), **kwargs)
+        except StaleVendorDataError as e:
+            stale_statement = stale_statement or e
+            last_unavailable = e
+            logger.warning('财报来源%r陈旧：%s；尝试后备。', vendor, e)
+            continue
         except VendorUnavailableError as e:
             logger.warning("Vendor %r unavailable for %s: %s; trying next vendor.", vendor, method, e)
             # Kept so an all-unavailable chain can say the vendor was the
@@ -276,6 +307,18 @@ def route_to_vendor(method: str, *args, **kwargs):
     # the symbol, so no other vendor's "no data" can speak for the whole chain:
     # report the vendors as the problem, not the instrument. It must not end
     # the run either.
+    if stale_statement is not None:
+        from tradingagents.dataflows.statement_freshness import StatementResult
+        from tradingagents.dataflows.vendor_observer import report_vendor
+        metadata = dict(stale_statement.statement_metadata)
+        expected = metadata.get('expected_period')
+        if expected:
+            warning = f"⚠ 最新季报（期末{expected}，{metadata.get('filing_date')}提交）未取得，以下为截至{metadata['latest_period']}的数据。"
+        else:
+            warning = f"⚠ 最新申报无法核验，以下为截至{metadata['latest_period']}的数据；{metadata['reason']}。"
+        report_vendor(method, metadata['actual_source'], 'success', error=metadata['reason'],
+                      symbol=args[0] if args else kwargs.get('ticker'), statement_metadata=metadata)
+        return StatementResult(warning + '\n' + stale_statement.original_text, metadata)
     if last_unavailable is not None:
         return vendor_unavailable(method, last_unavailable)
     if failed is not None and last_no_data is not None:

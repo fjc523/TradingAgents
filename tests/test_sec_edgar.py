@@ -55,6 +55,10 @@ FACTS = {
 @pytest.fixture(autouse=True)
 def _no_network_or_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(sec_edgar, "get_config", lambda: {"data_cache_dir": str(tmp_path)})
+    # 旧陈述测试的submissions明确可用但无新增申报；不得把companyfacts误作submissions。
+    original_cached = sec_edgar._cached_json
+    monkeypatch.setattr(sec_edgar, '_cached_json', lambda url, name: {'filings': {'recent': {'form': []}}}
+                        if '/submissions/' in url else original_cached(url, name))
     monkeypatch.setattr(sec_edgar, "_fetch_json", lambda url: TICKER_MAP if "company_tickers" in url else FACTS)
 
 

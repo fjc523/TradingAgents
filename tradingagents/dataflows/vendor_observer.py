@@ -18,14 +18,15 @@ def reset_vendor_observer(token):
     _OBSERVER.reset(token)
 
 
-def report_vendor(method, vendor, outcome, *, duration=0, error=None, symbol=None):
+def report_vendor(method, vendor, outcome, *, duration=0, error=None, symbol=None, statement_metadata=None):
     callback = _OBSERVER.get()
     if callback is None:
         return
     try:
         callback({"method": method, "source": vendor, "outcome": outcome,
                   "duration_seconds": duration, "error": error, "symbol": symbol,
-                  "recorded_at": datetime.now(timezone.utc).isoformat()})
+                  "recorded_at": datetime.now(timezone.utc).isoformat(),
+                  **({"statement_metadata": statement_metadata} if statement_metadata else {})})
     except Exception:
         # 观察者不能改变来源调用本身的结果。
         pass
@@ -53,5 +54,6 @@ def observed_call(method, vendor, impl, *args, observation_symbol=None, **kwargs
     # 占位文本本身说明了失败原因（如 HTTP 状态码），直接透传；只有空值才写泛化原因。
     reason = None if outcome == "success" else (text.strip()[:200] or "没有可用数据")
     report_vendor(method, vendor, outcome, duration=perf_counter()-started,
-                  error=reason, symbol=observation_symbol)
+                  error=reason, symbol=observation_symbol,
+                  statement_metadata=getattr(value, "statement_metadata", None))
     return value

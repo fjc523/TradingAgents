@@ -33,6 +33,8 @@ def create_fundamentals_analyst(llm):
         system_message = (
             "你是基本面分析师，关注中短期决策周期内的约束。" + focus
             + "使用get_fundamentals、get_balance_sheet、get_cashflow、get_income_statement和get_insider_transactions。"
+            "财报表头含⚠或陈旧提示时，报告第一段必须说明最新季报未取得及实际表体期末，指出哪些同比/环比结论不可靠。"
+            "年度申报已收录而Q4未单列时明确区别年度期与季度表期，不推算Q4。"
             "每项写明报告期；自由现金流注明口径，估值注明所用价格、日期和来源；"
             "内部人交易区分计划性交易与Form 144拟售，不把拟售当实际成交。"
             "财报在周期内时首段提示事件风险；日历未找到时写未找到已确认的财报日。"
