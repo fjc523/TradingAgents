@@ -1,3 +1,4 @@
+from tradingagents.dataflows.social_result import social_absence_instruction
 """两阶段研究辩论：每个并行节点只写自己的字段，汇合点统一写旧状态。"""
 from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction, report_or_absent
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS
@@ -24,6 +25,7 @@ def create_research_turn(llm, side, phase):
             prompt += '\n\n**对方首轮：**\n' + state[f'{opponent}_opening']
             prompt += '\n\n只针对对方最强的2条证据逐条回应，明确引用所回应条目，承认有效部分；核对其可证伪条件是否已触发及依据。全文≤500字。不新增反驳轮次，不给交易结论。'
         prompt += '\n数字必须来自输入，推算须明确标注及列出输入；缺失则说明，不能捏造。\n' + NO_EXTERNAL_TOOLS + get_language_instruction()
+        prompt += social_absence_instruction()
         return {key: llm.invoke(prompt).content}
 
     return node

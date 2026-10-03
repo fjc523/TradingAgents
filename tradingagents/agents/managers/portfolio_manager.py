@@ -10,6 +10,8 @@ free-text generation and the rating is read from that text.
 
 from __future__ import annotations
 
+from tradingagents.dataflows.social_result import social_absence_instruction
+
 import re
 
 from tradingagents.agents.context import (
@@ -123,6 +125,7 @@ Write these sections, in this order, starting with the rating on its own line:
 
         # The typed rating is the decision; the rendered text only carries it.
         # Read back from text, a rating the thesis quotes could replace it.
+        prompt += social_absence_instruction(config)
         decision = invoke_structured(structured_llm, prompt, "Portfolio Manager")
         if decision is not None:
             final_trade_decision = render_pm_decision(decision)

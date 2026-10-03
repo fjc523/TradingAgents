@@ -128,7 +128,7 @@ def test_sentiment_prompt_states_constraint(monkeypatch):
         overall_band=SentimentBand.BULLISH, overall_score=7.5,
         confidence="high", narrative="n",
     ))
-    sentiment.create_sentiment_analyst(llm)({
+    sentiment.create_sentiment_analyst(llm, {"sentiment_min_social_posts":0})({
         "company_of_interest": "NVDA", "trade_date": "2026-01-15",
         "asset_type": "stock", "messages": [],
     })

@@ -78,6 +78,7 @@ def fetch_stocktwits_messages(
     start_date: str | None = None,
     end_date: str | None = None,
     screen=None,
+    structured_result=False,
 ) -> str:
     """Fetch recent StockTwits messages for ``ticker`` and return them as a
     formatted plaintext block ready for prompt injection.
@@ -94,6 +95,10 @@ def fetch_stocktwits_messages(
     symbol has no messages, or the response shape is unexpected — the
     caller never has to special-case None or exceptions.
     """
+    from tradingagents.dataflows.social_result import SocialResult
+    def finish(text, *, available=False, count=0):
+        return SocialResult(text, available=available, effective_posts=count) if structured_result else text
+
     url = _API.format(ticker=_stocktwits_symbol(ticker))
     req = Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
@@ -103,7 +108,7 @@ def fetch_stocktwits_messages(
         # OSError covers URLError/TimeoutError/connection resets; HTTPException
         # covers chunked-transfer errors (IncompleteRead/BadStatusLine, #1024).
         logger.warning("StockTwits fetch failed for %s: %s", ticker, exc)
-        return f"<stocktwits unavailable: {type(exc).__name__}>"
+        return finish(f"<stocktwits unavailable: {type(exc).__name__}>")
 
     fetched = data.get("messages", []) if isinstance(data, dict) else []
     messages = _within_window(fetched, start_date, end_date)
@@ -113,11 +118,11 @@ def fetch_stocktwits_messages(
                 (_created_at(m) for m in fetched), start_date, end_date,
                 "StockTwits", f"messages about ${ticker.upper()}",
             )
-            return gap or (
+            return finish(gap or (
                 f"<no StockTwits messages for ${ticker.upper()} within "
                 f"{start_date}..{end_date}>"
-            )
-        return f"<no StockTwits messages found for ${ticker.upper()}>"
+            ), available=not bool(gap))
+        return finish(f"<no StockTwits messages found for ${ticker.upper()}>", available=True)
 
     note = ""
     if screen:
@@ -125,7 +130,7 @@ def fetch_stocktwits_messages(
         screened = len(messages)
         messages = [m for m, kept in zip(messages, keep, strict=True) if kept]
         if not messages:
-            return f"{note}\n\n<none of the {screened} StockTwits messages is about ${ticker.upper()}>"
+            return finish(f"{note}\n\n<none of the {screened} StockTwits messages is about ${ticker.upper()}>", available=True)
 
     lines = []
     bullish = bearish = unlabeled = 0
@@ -159,4 +164,4 @@ def fetch_stocktwits_messages(
         f"Unlabeled: {unlabeled} · "
         f"Total: {total} most-recent messages"
     )
-    return (f"{note}\n\n" if note else "") + summary + "\n\n" + "\n".join(lines)
+    return finish((f"{note}\n\n" if note else "") + summary + "\n\n" + "\n".join(lines), available=True, count=total)

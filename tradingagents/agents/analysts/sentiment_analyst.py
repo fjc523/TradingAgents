@@ -39,7 +39,7 @@ def _seven_days_back(trade_date: str) -> str:
     return (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
 
 
-def create_sentiment_analyst(llm):
+def create_sentiment_analyst(llm, config=None):
     """Create a sentiment analyst node for the trading graph.
 
     Pre-fetches news + StockTwits + Reddit data, injects them into the
@@ -47,6 +47,9 @@ def create_sentiment_analyst(llm):
     report via structured output (with a free-text fallback for providers
     that do not support it).
     """
+    if config is None:
+        from tradingagents.dataflows.config import get_config
+        config = get_config()
     structured_llm = bind_structured(llm, SentimentReport, "Sentiment Analyst")
 
     def sentiment_analyst_node(state):
@@ -64,9 +67,11 @@ def create_sentiment_analyst(llm):
         screen = jev_screen(ticker)
         from tradingagents.dataflows.config import get_config
         from tradingagents.dataflows.vendor_observer import observed_call, report_vendor
-        if get_config().get("stocktwits_enabled", True):
+        minimum = config.get("sentiment_min_social_posts", 3)
+        social_kwargs = {"structured_result": True} if minimum > 0 else {}
+        if config.get("stocktwits_enabled", True):
             stocktwits_block = observed_call("fetch_stocktwits", "StockTwits", fetch_stocktwits_messages,
-                ticker, observation_symbol=ticker, limit=30, start_date=start_date, end_date=end_date, screen=screen
+                ticker, observation_symbol=ticker, limit=30, start_date=start_date, end_date=end_date, screen=screen, **social_kwargs
             )
         else:
             # 部署方停用时不请求，也不能写成“没有讨论”。
@@ -74,7 +79,15 @@ def create_sentiment_analyst(llm):
                                 "this is not an absence of discussion>")
             report_vendor("fetch_stocktwits", "StockTwits", "unconfigured",
                           error="已停用：StockTwits 公共接口被 Cloudflare 拦截", symbol=ticker)
-        reddit_block = observed_call("fetch_reddit", "Reddit", fetch_reddit_posts, ticker, observation_symbol=ticker, start_date=start_date, end_date=end_date, screen=screen)
+        reddit_kwargs = {**social_kwargs, "company_name": state.get("company_name")} if minimum > 0 else {}
+        reddit_block = observed_call("fetch_reddit", "Reddit", fetch_reddit_posts, ticker, observation_symbol=ticker, start_date=start_date, end_date=end_date, screen=screen, **reddit_kwargs)
+        if minimum > 0 and (not getattr(stocktwits_block, 'available', False) or getattr(stocktwits_block, 'effective_posts', 0) == 0) and getattr(reddit_block, 'effective_posts', 0) < minimum:
+            stock_reason = 'StockTwits 停用' if not config.get('stocktwits_enabled', True) else 'StockTwits 不可用'
+            reason = f"{stock_reason}；Reddit 提及本标的的有效帖 {getattr(reddit_block, 'effective_posts', 0)} 条（门槛 {minimum} 条）"
+            report_text = '**Overall Sentiment:** 未评估（社交数据不足）\n' + reason
+            report_vendor('sentiment_assessment', 'social', 'skipped', error=reason, symbol=ticker)
+            return {"messages": [AIMessage(content=report_text)], "sentiment_report": report_text}
+
 
         system_message = _build_system_message(
             ticker=ticker,

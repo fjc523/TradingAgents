@@ -1,3 +1,4 @@
+from tradingagents.dataflows.social_result import social_absence_instruction
 from tradingagents.agents.context import (
     get_instrument_context_from_state,
     get_language_instruction,
@@ -56,6 +57,7 @@ def create_neutral_debator(llm, config=None):
                 '是否错失合格突破或回踩执行机会、止损过紧、目标配置不当。')
             prompt = prompt.replace('交易员方案：', '研究经理完整方向计划：' + state.get('investment_plan', '未提供，不能假称研究经理已考虑') + '\n交易员方案：', 1)
 
+        prompt += social_absence_instruction(config)
         response = llm.invoke(prompt)
 
         argument = f"Neutral Analyst: {response.content}"

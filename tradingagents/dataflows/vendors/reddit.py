@@ -277,6 +277,8 @@ def fetch_reddit_posts(
     start_date: str | None = None,
     end_date: str | None = None,
     screen=None,
+    structured_result=False,
+    company_name=None,
 ) -> str:
     """Fetch recent Reddit posts mentioning ``ticker`` across finance
     subreddits and return them as a formatted plaintext block.
@@ -294,6 +296,10 @@ def fetch_reddit_posts(
     flag per post and a note line that heads the block. It runs before the
     per-subreddit cut, so the posts it keeps fill the slots.
     """
+    from tradingagents.dataflows.social_result import SocialResult
+    def finish(text, *, available=False, count=0):
+        return SocialResult(text, available=available, effective_posts=count) if structured_result else text
+
     # Crypto reaches us as a Yahoo pair (BTC-USD); search Reddit for the base
     # ("BTC") so the query actually matches discussion instead of near-nothing.
     ticker = crypto_base(ticker) or ticker
@@ -303,17 +309,30 @@ def fetch_reddit_posts(
     fetched = _fetch_subreddit_rss(ticker, "+".join(subreddits), _FEED_PAGE, timeout, errors=errors)
     if fetched is None:
         reason = f": {errors[-1]}" if errors else ""
-        return f"<Reddit unavailable: fetch failed ({label}){reason}; this is not an absence of discussion>"
+        return finish(f"<Reddit unavailable: fetch failed ({label}){reason}; this is not an absence of discussion>")
 
     window = bool(start_date and end_date)
+    if structured_result:
+        def known_timestamp(post):
+            value=post.get('created_utc')
+            try:
+                return isinstance(value,(int,float)) and not isinstance(value,bool) and value != 0 and bool(datetime.fromtimestamp(value,UTC))
+            except (ValueError,OverflowError,OSError):
+                return False
+        fetched = [post for post in fetched if known_timestamp(post)]
     posts = _within_window(fetched, start_date, end_date)
+    if structured_result:
+        pattern = re.compile(r'(?<![A-Za-z0-9])\$?' + re.escape(ticker) + r'(?![A-Za-z0-9])', re.IGNORECASE)
+        company_pattern = re.compile(r'(?<![A-Za-z0-9])' + re.escape(company_name) + r'(?![A-Za-z0-9])', re.IGNORECASE) if company_name else None
+        posts = [post for post in posts if (pattern.search((post.get('title') or '') + '\n' + (post.get('selftext') or '')) or (company_pattern and company_pattern.search((post.get('title') or '') + '\n' + (post.get('selftext') or ''))))]
+
     if not posts:
         gap = window and coverage_gap(
             _coverage_dates(fetched), start_date, end_date,
             "Reddit search", f"discussion of {ticker.upper()}",
         )
         period = f"within {start_date}..{end_date}" if window else "in the past 7 days"
-        return gap or f"<no Reddit posts found mentioning {ticker.upper()} across {label} {period}>"
+        return finish(gap or f"<no Reddit posts found mentioning {ticker.upper()} across {label} {period}>", available=not bool(gap))
 
     def sub_of(p):
         return p.get("subreddit") or (subreddits[0] if len(subreddits) == 1 else "unknown")
@@ -334,6 +353,7 @@ def fetch_reddit_posts(
 
     page_full = len(fetched) >= _FEED_PAGE
     blocks = []
+    effective_posts = 0
     for sub, sub_posts in by_sub.values():
         if not sub_posts:
             if sub.lower() in screened_out:
@@ -345,6 +365,7 @@ def fetch_reddit_posts(
                 )
             continue
         sub_posts = sub_posts[:limit_per_sub]  # the feed is newest-first
+        effective_posts += len(sub_posts)
         lines = [f"r/{sub} — {len(sub_posts)} recent posts mentioning {ticker.upper()}:"]
         for p in sub_posts:
             title = (p.get("title") or "").replace("\n", " ").strip()
@@ -358,4 +379,4 @@ def fetch_reddit_posts(
                 + (f"\n    body excerpt: {selftext}" if selftext else "")
             )
         blocks.append("\n".join(lines))
-    return "\n\n".join(([note] if note else []) + blocks)
+    return finish("\n\n".join(([note] if note else []) + blocks), available=True, count=effective_posts)

@@ -29,7 +29,7 @@ def _run(monkeypatch, enabled):
     llm = _LLM()
     token = set_vendor_observer(events.append)
     try:
-        with run_config({"stocktwits_enabled": enabled}):
+        with run_config({"stocktwits_enabled": enabled, "sentiment_min_social_posts": 0}):
             sentiment_analyst.create_sentiment_analyst(llm)(
                 {"company_of_interest": "TSLA", "trade_date": "2026-10-02", "messages": []})
     finally:

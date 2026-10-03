@@ -43,6 +43,7 @@ class RiskDebateState(TypedDict):
 
 
 class AgentState(MessagesState):
+    company_name: str
     instrument_context_full: str
     instrument_context_brief: str
     context_compaction: bool
