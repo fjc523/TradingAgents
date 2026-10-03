@@ -114,12 +114,14 @@ class GraphSetup:
         deep_thinking_llm: Any,
         conditional_logic: ConditionalLogic,
         max_tool_rounds: int,
+        config=None,
     ):
         """Initialize with required components."""
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.conditional_logic = conditional_logic
         self.max_tool_rounds = max_tool_rounds
+        self.config = dict(config or {})
 
     def setup_graph(
         self, selected_analysts=("market", "social", "news", "fundamentals")
@@ -146,7 +148,7 @@ class GraphSetup:
 
         bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)
         bear_researcher_node = create_bear_researcher(self.quick_thinking_llm)
-        research_manager_node = create_research_manager(self.deep_thinking_llm)
+        research_manager_node = create_research_manager(self.deep_thinking_llm, self.config)
         trader_node = create_trader(self.deep_thinking_llm)
 
         aggressive_analyst = create_aggressive_debator(self.quick_thinking_llm)
@@ -160,8 +162,17 @@ class GraphSetup:
             workflow.add_node(spec.agent_node,
                               _analyst_graph(spec, analyst_factories[spec.key](), self.max_tool_rounds))
 
-        workflow.add_node("Bull Researcher", bull_researcher_node)
-        workflow.add_node("Bear Researcher", bear_researcher_node)
+        structured_debate = self.config.get('debate_mode', 'structured') == 'structured'
+        if structured_debate:
+            from tradingagents.agents.researchers.structured_debate import create_research_turn, join_research_debate
+            for side, label in [('bull', 'Bull'), ('bear', 'Bear')]:
+                for phase in ['opening', 'rebuttal']:
+                    workflow.add_node(f'{label} {phase.capitalize()}', create_research_turn(self.quick_thinking_llm, side, phase))
+            workflow.add_node('Research Rebuttals', lambda state: {})
+            workflow.add_node('Research Debate Summary', join_research_debate)
+        else:
+            workflow.add_node("Bull Researcher", bull_researcher_node)
+            workflow.add_node("Bear Researcher", bear_researcher_node)
         from .late_news import with_news_refresh
         workflow.add_node("Research Manager", with_news_refresh(research_manager_node, "research"))
         workflow.add_node("Trader", trader_node)
@@ -175,15 +186,18 @@ class GraphSetup:
         analysts = [spec.agent_node for spec in plan.specs]
         for node in analysts:
             workflow.add_edge(START, node)
-        workflow.add_edge(analysts, "Bull Researcher")
-
-        # Both research-debate edges share the complete DEBATE_PATH_MAP (#1088).
-        for debate_node in ("Bull Researcher", "Bear Researcher"):
-            workflow.add_conditional_edges(
-                debate_node,
-                self.conditional_logic.should_continue_debate,
-                DEBATE_PATH_MAP,
-            )
+        if structured_debate:
+            for node in ['Bull Opening', 'Bear Opening']:
+                workflow.add_edge(analysts, node)
+                workflow.add_edge('Research Rebuttals', node.replace('Opening', 'Rebuttal'))
+            workflow.add_edge(['Bull Opening', 'Bear Opening'], 'Research Rebuttals')
+            workflow.add_edge(['Bull Rebuttal', 'Bear Rebuttal'], 'Research Debate Summary')
+            workflow.add_edge('Research Debate Summary', 'Research Manager')
+        else:
+            workflow.add_edge(analysts, "Bull Researcher")
+            # 关闭结构化模式保留原有顺序路由。
+            for debate_node in ("Bull Researcher", "Bear Researcher"):
+                workflow.add_conditional_edges(debate_node, self.conditional_logic.should_continue_debate, DEBATE_PATH_MAP)
         workflow.add_edge("Research Manager", "Trader")
         workflow.add_edge("Trader", "Aggressive Analyst")
         # All three risk edges share the complete RISK_ANALYSIS_PATH_MAP (#1088).

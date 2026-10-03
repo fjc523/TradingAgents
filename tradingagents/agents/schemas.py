@@ -117,9 +117,40 @@ class ResearchPlan(BaseModel):
     )
 
 
+# 保留旧类本身和schema标题，关闭开关时不把新增字段描述注入旧提示。
+LegacyResearchPlan = ResearchPlan
+
+
+class EvidenceResearchPlan(LegacyResearchPlan):
+    """研究经理直接读报告后的引用核对；旧记录允许缺字段。"""
+    evidence_check: str | None = Field(default=None, max_length=200,
+        description='引用核对≤200字：列出辩手引用与报告不符处、双方遗漏的关键事实；没有时写“无”并列已核对的2–3个数据点。')
+
+
+class ResearchCrux(BaseModel):
+    """裁判列出的决定性分歧点。"""
+    bull_claim: str = Field(description='多方观点及来源条目。')
+    bear_claim: str = Field(description='空方观点及来源条目。')
+    evidence: str = Field(description='对应报告中的决定性证据及来源。')
+    winner: str = Field(description='多方、空方或未决。')
+    reason: str = Field(description='胜负或未决的具体理由。')
+
+
+class CruxResearchPlan(LegacyResearchPlan):
+    """结构化辩论的分歧裁决；旧记录允许缺字段。"""
+    cruxes: list[ResearchCrux] | None = Field(default=None, min_length=3, max_length=5,
+        description='先列3–5个分歧点，逐项比较双方主张、报告证据、胜负及理由，再给评级。')
+
+
+class ResearchPlan(EvidenceResearchPlan):
+    """默认研究计划增加引用核对和分歧裁决，兼容旧记录。"""
+    cruxes: list[ResearchCrux] | None = Field(default=None, min_length=3, max_length=5,
+        description='先列3–5个分歧点，逐项比较双方主张、报告证据、胜负及理由，再给评级。')
+
+
 def render_research_plan(plan: ResearchPlan) -> str:
     """Render a ResearchPlan to markdown for storage and the trader's prompt context."""
-    return "\n".join([
+    text = "\n".join([
         f"**Recommendation**: {plan.recommendation.value}",
         "",
         f"**Rationale**: {plan.rationale}",
@@ -128,6 +159,17 @@ def render_research_plan(plan: ResearchPlan) -> str:
         "",
         f"**目标配置（标准仓位=100%）**: {_allocation_text(plan.target_allocation_pct)}",
     ])
+    if hasattr(plan, 'cruxes'):
+        rows = ['**分歧点裁决**']
+        if plan.cruxes:
+            for index, crux in enumerate(plan.cruxes, 1):
+                rows.append(f'{index}. 多方：{crux.bull_claim}；空方：{crux.bear_claim}；证据：{crux.evidence}；裁决：{crux.winner}；理由：{crux.reason}')
+        else:
+            rows.append('未提供；不能视为已裁决')
+        text = '\n\n'.join(rows) + '\n\n' + text
+    if hasattr(plan, 'evidence_check'):
+        text += '\n\n**引用核对**: ' + (plan.evidence_check or '未提供；不能视为已核对')
+    return text
 
 
 # ---------------------------------------------------------------------------

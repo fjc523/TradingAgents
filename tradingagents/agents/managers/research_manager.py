@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction
+from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction, report_or_absent
 from tradingagents.agents.rating import RATING_DEFINITIONS
-from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, ResearchPlan, render_research_plan
+from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, ResearchPlan, LegacyResearchPlan, EvidenceResearchPlan, CruxResearchPlan, render_research_plan
 from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
     bind_structured,
@@ -12,8 +12,14 @@ from tradingagents.agents.structured import (
 )
 
 
-def create_research_manager(llm):
-    structured_llm = bind_structured(llm, ResearchPlan, "Research Manager")
+def create_research_manager(llm, config=None):
+    if config is None:
+        from tradingagents.dataflows.config import get_config
+        config = get_config()
+    reads_reports = config.get('research_manager_reads_reports', True)
+    structured_debate = config.get('debate_mode', 'structured') == 'structured'
+    schema = (ResearchPlan if reads_reports else CruxResearchPlan) if structured_debate else (EvidenceResearchPlan if reads_reports else LegacyResearchPlan)
+    structured_llm = bind_structured(llm, schema, "Research Manager")
 
     def research_manager_node(state) -> dict:
         instrument_context = get_instrument_context_from_state(state, profile='research_manager')
@@ -49,6 +55,37 @@ Write these sections, in this order, starting with the recommendation on its own
 {ALLOCATION_INSTRUCTION}
 
 {NO_EXTERNAL_TOOLS}""" + get_language_instruction(labelled=True)
+
+        if reads_reports:
+            reports = '\n\n'.join(f'**{label}：**\n{report_or_absent(state.get(key, ""), source)}'
+                for key, label, source in [('market_report', '市场报告', 'market'),
+                                           ('fundamentals_report', '基本面报告', 'fundamentals'),
+                                           ('sentiment_report', '情绪报告', 'sentiment'),
+                                           ('news_report', '新闻报告', 'news')])
+            prompt = f"""你是研究经理与辩论裁判，直接核对完整报告，再评估双方证据。
+{instrument_context}
+
+{reports}
+
+**辩论记录：**
+{history}
+
+**历史教训：**
+{state.get('past_context', '') or '无已结算教训'}
+
+## 输出要求
+{RATING_DEFINITIONS}
+冲突本身不构成Hold理由；独立比较证据，选择证据占优方，仅均衡或不足时Hold，不受先后发言影响。
+- **Recommendation**：Buy / Overweight / Hold / Underweight / Sell
+- **Rationale**：≤600字，决定性论据前3条、驳回及原因、不确定性、复评触发。
+- **Strategic Actions**：给交易员的行动要求。
+- **引用核对**：≤200字，列辩手引用不符处及双方都遗漏但影响结论的事实；无则写“无”并列已核对的2–3个数据点。
+{ALLOCATION_INSTRUCTION}
+{NO_EXTERNAL_TOOLS}""" + get_language_instruction(labelled=True)
+
+        if structured_debate:
+            prompt = prompt.replace('starting with the recommendation on its own line:', 'starting with 3–5 evidence-based cruxes, then the recommendation:')
+            prompt += '\n先输出3–5个分歧点裁决（cruxes），每项列多方主张、空方主张、决定性报告证据、胜方/未决及理由，再输出评级。不得凭发言顺序判胜负。'
 
         investment_plan = invoke_structured_or_freetext(
             structured_llm,

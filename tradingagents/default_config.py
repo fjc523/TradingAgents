@@ -153,6 +153,8 @@ def build_default_config() -> dict:
         # Internal agent debate stays in English for reasoning quality
         "output_language": "English",
         # Debate and discussion settings
+        "debate_mode": "structured",
+        "research_manager_reads_reports": True,
         "max_debate_rounds": 1,
         "max_risk_discuss_rounds": 1,
         # StockTwits 公共接口可能被 Cloudflare 拦截；部署方可关闭预取，关闭后不发请求。

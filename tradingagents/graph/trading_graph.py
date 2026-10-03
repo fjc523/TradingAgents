@@ -118,6 +118,7 @@ class TradingAgentsGraph:
             self.deep_thinking_llm,
             self.conditional_logic,
             max_tool_rounds,
+            config=self.config,
         )
 
         self.propagator = Propagator(

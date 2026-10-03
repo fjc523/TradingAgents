@@ -63,6 +63,12 @@ class AgentState(MessagesState):
     news_report: Annotated[str, "Report from the News Analyst on company and world news"]
     fundamentals_report: Annotated[str, "Report from the Fundamentals Analyst"]
 
+    # 四个并行研究节点独占各自输出，屏障后再汇总旧辩论状态。
+    bull_opening: str
+    bear_opening: str
+    bull_rebuttal: str
+    bear_rebuttal: str
+
     # researcher team discussion step
     investment_debate_state: Annotated[
         InvestDebateState, "Current state of the debate on if to invest or not"
