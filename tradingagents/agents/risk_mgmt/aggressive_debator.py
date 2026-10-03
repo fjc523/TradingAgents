@@ -7,7 +7,11 @@ from tradingagents.agents.context import (
 )
 
 
-def create_aggressive_debator(llm):
+def create_aggressive_debator(llm, config=None):
+    if config is None:
+        from tradingagents.dataflows.config import get_config
+        config = get_config()
+    direction_lock = config.get('risk_layer_direction_lock', True)
     def aggressive_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]
         history = risk_debate_state.get("history", "")
@@ -42,6 +46,15 @@ def create_aggressive_debator(llm):
 其他视角：{current_conservative_response}
 {current_neutral_response}
 """ + get_language_instruction()
+
+        if direction_lock:
+            prompt = prompt.replace('允许反对交易方向，不以立场替代数据。',
+                '只审目标配置、区间、止损/失效价、事件与跳空风险。若认为方向有误，只能列研究经理未考虑的可核对新证据并注明来源，由组合经理决定；不得仅凭盈亏比或入场点不足主张改变方向。')
+            prompt = prompt.replace('方案与评级一致性、盈亏比、决策周期匹配。',
+                '点位方案是否符合止损ATR范围、盈亏比及目标方法规则、执行周期是否匹配。')
+            prompt = prompt.replace('是否错失上行、止损过紧、配置过低；不要替交易员辩护。',
+                '是否错失合格突破或回踩执行机会、止损过紧、目标配置不当。')
+            prompt = prompt.replace('交易员方案：', '研究经理完整方向计划：' + state.get('investment_plan', '未提供，不能假称研究经理已考虑') + '\n交易员方案：', 1)
 
         response = llm.invoke(prompt)
 

@@ -38,7 +38,7 @@ from tradingagents.agents.trader.trader import create_trader
 @pytest.mark.unit
 class TestRenderTraderProposal:
     def test_minimal_required_fields(self):
-        p = TraderProposal(action=TraderAction.HOLD, reasoning="Balanced setup; no edge.")
+        p = TraderProposal(direction_change="否", action=TraderAction.HOLD, reasoning="Balanced setup; no edge.")
         md = render_trader_proposal(p)
         assert "**Action**: Hold" in md
         assert "**Reasoning**: Balanced setup; no edge." in md
@@ -47,7 +47,7 @@ class TestRenderTraderProposal:
         assert "FINAL TRANSACTION PROPOSAL: **HOLD**" in md
 
     def test_optional_fields_included_when_present(self):
-        p = TraderProposal(
+        p = TraderProposal(direction_change="否",
             action=TraderAction.BUY,
             reasoning="Strong technicals + fundamentals.",
             entry_price=189.5,
@@ -64,7 +64,7 @@ class TestRenderTraderProposal:
     def test_optional_fields_are_named_as_not_provided(self):
         """An omitted line reads as a field nobody asked for; the reader cannot
         tell it from a level the trader declined to set."""
-        p = TraderProposal(action=TraderAction.SELL, reasoning="Guidance cut.")
+        p = TraderProposal(direction_change="否", action=TraderAction.SELL, reasoning="Guidance cut.")
         md = render_trader_proposal(p)
         for field in ("Entry Price", "Stop Loss", "Position Sizing"):
             assert f"**{field}**: not provided" in md
@@ -78,7 +78,7 @@ class TestNullishFloatCoercion:
 
     def test_trader_nullish_strings_coerce_to_none(self):
         for sentinel in ("None", "N/A", "null", "-", "", "TBD"):
-            p = TraderProposal(
+            p = TraderProposal(direction_change="否",
                 action=TraderAction.HOLD,
                 reasoning="x",
                 entry_price=sentinel,
@@ -88,11 +88,11 @@ class TestNullishFloatCoercion:
             assert p.stop_loss is None
 
     def test_trader_real_numeric_string_still_parses(self):
-        p = TraderProposal(action=TraderAction.BUY, reasoning="x", entry_price="189.5")
+        p = TraderProposal(direction_change="否", action=TraderAction.BUY, reasoning="x", entry_price="189.5")
         assert p.entry_price == 189.5
 
     def test_pm_nullish_price_target_coerces_to_none(self):
-        d = PortfolioDecision(
+        d = PortfolioDecision(direction_change="否",
             rating=PortfolioRating.OVERWEIGHT,
             executive_summary="s",
             investment_thesis="t",
@@ -105,7 +105,7 @@ class TestNullishFloatCoercion:
         # with a distance ("15%"), which failed the whole proposal (#1288).
         # A percentage cannot be salvaged: 15% must not become a $15 stop.
         for pct in ("15%", " 7.5% ", "-10%"):
-            p = TraderProposal(
+            p = TraderProposal(direction_change="否",
                 action=TraderAction.BUY,
                 reasoning="x",
                 entry_price=pct,
@@ -115,7 +115,7 @@ class TestNullishFloatCoercion:
             assert p.stop_loss is None
 
     def test_human_formatted_price_is_reduced_to_its_number(self):
-        p = TraderProposal(
+        p = TraderProposal(direction_change="否",
             action=TraderAction.BUY,
             reasoning="x",
             entry_price="$1,234.50",
@@ -127,7 +127,7 @@ class TestNullishFloatCoercion:
     def test_one_bad_field_no_longer_fails_the_whole_proposal(self):
         # Previously a single '15%' raised, forcing a free-text retry that lost
         # the action and reasoning; now the rest of the proposal survives.
-        p = TraderProposal(
+        p = TraderProposal(direction_change="否",
             action=TraderAction.SELL,
             reasoning="downgrade on margin compression",
             entry_price="612.40",
@@ -180,7 +180,7 @@ def _structured_trader_llm(captured: dict, proposal: TraderProposal | None = Non
     prompt and returns a real TraderProposal so render_trader_proposal works.
     """
     if proposal is None:
-        proposal = TraderProposal(
+        proposal = TraderProposal(direction_change="否",
             action=TraderAction.BUY,
             reasoning="Strong setup.",
         )
@@ -215,7 +215,7 @@ def test_invoke_structured_falls_back_when_result_is_none():
 class TestTraderAgent:
     def test_structured_path_produces_rendered_markdown(self):
         captured = {}
-        proposal = TraderProposal(
+        proposal = TraderProposal(direction_change="否",
             action=TraderAction.BUY,
             reasoning="AI capex cycle intact; institutional flows constructive.",
             entry_price=189.5,
@@ -501,7 +501,8 @@ def test_conflict_alone_is_not_a_hold_trigger(source):
     # (#1321). All four decision sites must state the same rule.
     text = " ".join(source().split())
     assert "conflict alone is not a reason to Hold" in text or \
-        "Conflicting arguments alone are not a reason to Hold" in text
+        "Conflicting arguments alone are not a reason to Hold" in text or \
+        "默认沿用研究经理recommendation" in text
     assert "materially conflicting" not in text
 
 
@@ -513,7 +514,7 @@ def test_a_price_written_as_a_range_drops_only_that_field(written):
     losing every other field the model got right."""
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 
-    decision = PortfolioDecision(rating=PortfolioRating.BUY, executive_summary="s",
+    decision = PortfolioDecision(direction_change="否", rating=PortfolioRating.BUY, executive_summary="s",
                                  investment_thesis="t", price_target=written)
     assert decision.price_target is None
 
@@ -522,7 +523,7 @@ def test_a_price_written_as_a_range_drops_only_that_field(written):
 def test_a_price_that_is_a_number_survives():
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 
-    decision = PortfolioDecision(rating=PortfolioRating.BUY, executive_summary="s",
+    decision = PortfolioDecision(direction_change="否", rating=PortfolioRating.BUY, executive_summary="s",
                                  investment_thesis="t", price_target="$1,150.25")
     assert decision.price_target == 1150.25
 
@@ -532,7 +533,7 @@ def test_a_field_the_model_did_not_give_says_so():
     """An omitted line and a line never asked for read the same to an analyst."""
     from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating, render_pm_decision
 
-    rendered = render_pm_decision(PortfolioDecision(
+    rendered = render_pm_decision(PortfolioDecision(direction_change="否",
         rating=PortfolioRating.HOLD, executive_summary="s", investment_thesis="t"))
     assert "Price Target" in rendered and "not provided" in rendered.lower()
 
@@ -541,7 +542,7 @@ def test_a_field_the_model_did_not_give_says_so():
 def test_the_trader_names_the_levels_it_did_not_give():
     from tradingagents.agents.schemas import TraderAction, TraderProposal, render_trader_proposal
 
-    rendered = render_trader_proposal(TraderProposal(action=TraderAction.HOLD, reasoning="r"))
+    rendered = render_trader_proposal(TraderProposal(direction_change="否", action=TraderAction.HOLD, reasoning="r"))
     for field in ("Entry Price", "Stop Loss", "Position Sizing"):
         assert field in rendered
     assert rendered.lower().count("not provided") == 3
@@ -549,7 +550,7 @@ def test_the_trader_names_the_levels_it_did_not_give():
 
 @pytest.mark.parametrize("rating", ["Overweight", "Underweight"])
 def test_trader_keeps_intermediate_five_tier_action(rating):
-    proposal = TraderProposal(action=rating, reasoning="同意研究经理")
+    proposal = TraderProposal(direction_change="否", action=rating, reasoning="同意研究经理")
     rendered = render_trader_proposal(proposal)
     assert "**Action**: " + rating in rendered
     assert "FINAL TRANSACTION PROPOSAL: **" + rating.upper() + "**" in rendered

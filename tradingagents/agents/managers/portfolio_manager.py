@@ -17,13 +17,19 @@ from tradingagents.agents.context import (
     get_language_instruction,
     get_portfolio_context_from_state,
 )
-from tradingagents.agents.rating import RATING_DEFINITIONS, parse_rating
-from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, price_plan_instruction, PortfolioDecision, render_pm_decision
+from tradingagents.agents.rating import rating_definitions, parse_rating
+from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, price_plan_instruction, PortfolioDecision, LegacyPortfolioDecision, render_pm_decision
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS, bind_structured, invoke_structured
 
 
-def create_portfolio_manager(llm):
-    structured_llm = bind_structured(llm, PortfolioDecision, "Portfolio Manager")
+def create_portfolio_manager(llm, config=None):
+    if config is None:
+        from tradingagents.dataflows.config import get_config
+        config = get_config()
+    config = dict(config)
+    direction_lock = config.get('risk_layer_direction_lock', True) or config.get('rating_timing_decoupled', True)
+    schema = PortfolioDecision if direction_lock else LegacyPortfolioDecision
+    structured_llm = bind_structured(llm, schema, "Portfolio Manager")
 
     def portfolio_manager_node(state) -> dict:
         instrument_context = get_instrument_context_from_state(state, profile='portfolio_manager')
@@ -52,7 +58,7 @@ def create_portfolio_manager(llm):
 
 ---
 
-{RATING_DEFINITIONS}
+{rating_definitions(config)}
 
 默认沿用交易员点位，修改须说明理由；方案必须与评级一致。Underweight或Sell不新建仓，建仓方案首句写不适用及原因。执行摘要≤4句，投资论点≤800字，每个价格方案≤200字。
 市场关键价位（提取失败时为完整市场报告）：
@@ -77,10 +83,43 @@ Write these sections, in this order, starting with the rating on its own line:
 - **Executive Summary**: the call and how to act on it
 - **Investment Thesis**: the evidence that decided it, and what would change it
 
-{price_plan_instruction()}
+{price_plan_instruction(config)}
 {ALLOCATION_INSTRUCTION}
 
 {NO_EXTERNAL_TOOLS}{get_language_instruction(labelled=True)}"""
+
+        if direction_lock:
+            prompt = f"""你是组合经理，综合执行风险并给出最终方向评级与执行方案。
+{instrument_context}
+
+**研究经理完整计划与分歧点（方向锚点）：**
+{research_plan}
+
+**交易员方案：**
+{trader_plan}
+
+**风险审阅历史：**
+{history}
+
+{portfolio_context}
+市场关键价位（提取失败时为完整市场报告）：
+{price_context}
+{lessons_line}
+
+默认沿用研究经理recommendation，不能以交易员改后评级或审阅意见多数替代研究判断。只有研究经理未考虑的新信息才可改变方向：late news补抓、新增数据或审阅人列出的可核对新事实，须注明来源、事实及方向影响。盈亏比、入场点不足和笼统“风险较高”不是依据。
+默认沿用交易员点位，修改须给具体理由。Underweight或Sell不新建仓。执行摘要≤4句、投资论点≤800字、每项点位≤200字。
+{rating_definitions(config)}
+{price_plan_instruction(config)}
+{ALLOCATION_INSTRUCTION}
+## 输出要求
+- **Rating**：Buy / Overweight / Hold / Underweight / Sell
+- **Executive Summary**：方向、配置及如何执行
+- **Investment Thesis**：决定性事实及复评条件
+- **方向变更**：direction_change必填“否”或“是：具体新证据”
+{NO_EXTERNAL_TOOLS}{get_language_instruction(labelled=True)}"""
+
+        if config.get('rating_timing_decoupled', True):
+            prompt += '\nBuy/Overweight没有合格入场点时保持评级；entry_plan首句写“不适用：等待回踩至 X 或突破 Y 确认”，X/Y均为输入中的具体回踩价和突破价；缺锚点须明确说明缺失，不能编造价位。'
 
         # The typed rating is the decision; the rendered text only carries it.
         # Read back from text, a rating the thesis quotes could replace it.

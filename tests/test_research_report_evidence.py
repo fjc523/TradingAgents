@@ -29,7 +29,7 @@ def test_disabled_original_prompt_and_schema_golden():
     # 基线由改动前72f46ce的原类和原提示独立捕获，不由新实现生成期望值。
     llm = Capture()
     with run_config({'output_language': 'Chinese'}):
-        create_research_manager(llm, {'research_manager_reads_reports': False, 'debate_mode': 'legacy'})(fixed_state())
+        create_research_manager(llm, {'research_manager_reads_reports': False, 'debate_mode': 'legacy', 'rating_timing_decoupled': False})(fixed_state())
     assert hashlib.sha256(llm.prompt.encode()).hexdigest() == '847d24dc44c628678f142703ed7546b7860976286e516bdf40a09d3d75b6709d'
     assert hashlib.sha256(json.dumps(llm.schema.model_json_schema(), sort_keys=True).encode()).hexdigest() == 'b2acf3986011ff5bed4da1454ccd3e9699e30f63588320b2e1b8ba551fd1ab25'
     assert 'evidence_check' not in llm.schema.model_fields

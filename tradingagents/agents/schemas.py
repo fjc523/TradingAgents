@@ -210,7 +210,10 @@ def price_plan_instruction(config=None) -> str:
     normal = config.get("price_plan_stop_atr_normal", (1.5, 2.0))
     maximum = config.get("price_plan_stop_atr_max", 2.5)
     reward = config.get("price_plan_min_reward_risk", 1.5)
-    return _PRICE_PLAN_BASE + (
+    base = _PRICE_PLAN_BASE
+    if config.get("rating_timing_decoupled", True):
+        base = base.replace("方案不能与最终评级相矛盾。", "点位仅表达执行时机，无合格点位不改变方向评级。")
+    text = base + (
         "每个区间必须引用价位锚点、快照或关键价位表中的具体项及日期；方案≤200字。"
         "先把止损放在真实支撑或均线之外，买入按区间上沿（最不利端）计算距离。"
         f"允许止损距离{minimum:g}–{maximum:g}倍ATR，推荐{normal[0]:g}–{normal[1]:g}倍；"
@@ -221,6 +224,17 @@ def price_plan_instruction(config=None) -> str:
         "减仓不受盈亏比门槛约束，可在失效或第一目标附近分批执行。"
         "stop_loss必须与建仓方案失效价一致，不适用时不编造数值。"
     )
+
+    if config.get('price_plan_alt_target', True):
+        text += (
+            '默认第一目标仍取最近上方阻力。仅当价格距最近上方阻力不足1ATR，或处于60日新高附近且上方无阻力时，'
+            '可使用替代第一目标=区间上沿+2×ATR，必须写明“目标方法：ATR替代”。不得把任意无数据阻力当作符合条件。'
+            '可选择突破跟随：区间为已知阻力上方0–0.25ATR，须收盘站上阻力才触发，止损在阻力下方1–1.5ATR。'
+            f'仍按区间上沿计算总止损距离{minimum:g}–{maximum:g}ATR及盈亏比≥{reward:g}；不满足仍写不适用并等待，不降低门槛。'
+        )
+    if config.get('rating_timing_decoupled', True):
+        text += 'Buy/Overweight没有合格入场点时保持评级；当前无合格入场点或盈亏比不足只影响entry_plan/add_plan。建仓首句写“不适用：等待回踩至 X 或突破 Y 确认”，X和Y均须为输入可核对的具体价位，不能作为改评级理由。缺任一锚点必须说明缺失并等待可靠行情，不编造X/Y。Underweight或Sell不新建仓。'
+    return text
 
 
 # 旧导入仍可使用缺省渲染结果；角色运行时调用函数读取配置。
@@ -287,6 +301,34 @@ class TraderProposal(BaseModel):
         return _coerce_optional_float(v)
 
 
+# 旧输出类保留原schema标题及字段描述，用于关闭开关时的生成。
+LegacyTraderProposal = TraderProposal
+
+
+def _validate_direction_change(value):
+    """只验证声明格式；不替模型生成证据或事后改动作。"""
+    value = value.strip()
+    if value == '否' or (value.startswith('是：') and value[2:].strip()):
+        return value
+    raise ValueError('direction_change必须为“否”或“是：具体新证据”')
+
+
+class TraderProposal(LegacyTraderProposal):
+    """新生成方案必须声明是否依据新证据变更研究方向。"""
+    action: PortfolioRating = Field(description='默认沿用研究经理recommendation。只因研究经理未考虑的可核对新证据才可改变，盈亏比或买点不足不构成依据。')
+    direction_change: str = Field(description='必填“否”或“是：具体新证据”，变更须注明研究经理未考虑的来源、事实及方向影响；不能仅写盈亏比、买点不足或笼统风险。')
+    _direction_format = field_validator('direction_change')(_validate_direction_change)
+
+
+class CompatibleTraderProposal(LegacyTraderProposal):
+    """仅加载旧记录，缺声明显示未提供，不用于新生成schema。"""
+    direction_change: str | None = None
+
+
+def load_trader_proposal(data):
+    return CompatibleTraderProposal.model_validate(data) if 'direction_change' not in data else TraderProposal.model_validate(data)
+
+
 def render_trader_proposal(proposal: TraderProposal) -> str:
     """渲染五档动作，保留FINAL TRANSACTION PROPOSAL行及旧三档兼容。"""
     parts = [
@@ -294,6 +336,8 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
         "",
         f"**Reasoning**: {proposal.reasoning}",
     ]
+    if hasattr(proposal, 'direction_change'):
+        parts.extend(['', '**方向变更**: ' + (proposal.direction_change or '未提供；旧记录未声明')])
     # Named even when absent, so a reader can tell a level the trader chose not
     # to give from one the schema never asked for.
     for label, value in (("Entry Price", proposal.entry_price),
@@ -377,6 +421,26 @@ class PortfolioDecision(BaseModel):
         return _coerce_optional_float(v)
 
 
+LegacyPortfolioDecision = PortfolioDecision
+
+
+class PortfolioDecision(LegacyPortfolioDecision):
+    """新组合决定默认锚定研究方向，变更须披露新证据。"""
+    time_horizon: str | None = Field(default=None, description='决策方向周期为未来5–20交易日；点位有效期另依输入，不写3–6个月。')
+    rating: PortfolioRating = Field(description='默认沿用研究经理recommendation，而非审阅意见多数或交易员改后评级；只有研究经理未考虑的可核对新信息才允许变更。')
+    direction_change: str = Field(description='必填“否”或“是：具体新证据”，列late news/新增数据或审阅人新事实的来源及方向影响；盈亏比、入场点或笼统风险不构成变更依据。')
+    _direction_format = field_validator('direction_change')(_validate_direction_change)
+
+
+class CompatiblePortfolioDecision(LegacyPortfolioDecision):
+    """旧结果读取专用；没有字段不默认为否。"""
+    direction_change: str | None = None
+
+
+def load_portfolio_decision(data):
+    return CompatiblePortfolioDecision.model_validate(data) if 'direction_change' not in data else PortfolioDecision.model_validate(data)
+
+
 def render_pm_decision(decision: PortfolioDecision) -> str:
     """Render a PortfolioDecision back to the markdown shape the rest of the system expects.
 
@@ -392,6 +456,8 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         "",
         f"**Investment Thesis**: {decision.investment_thesis}",
     ]
+    if hasattr(decision, 'direction_change'):
+        parts.extend(['', '**方向变更**: ' + (decision.direction_change or '未提供；旧记录未声明')])
     for label, value in (("参考价格与时点", decision.reference_price),
                          ("建仓点位", decision.entry_plan), ("加仓点位", decision.add_plan),
                          ("减仓点位", decision.reduce_plan)):

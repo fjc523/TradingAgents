@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction, report_or_absent
-from tradingagents.agents.rating import RATING_DEFINITIONS
+from tradingagents.agents.rating import rating_definitions
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, ResearchPlan, LegacyResearchPlan, EvidenceResearchPlan, CruxResearchPlan, render_research_plan
 from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
@@ -16,6 +16,7 @@ def create_research_manager(llm, config=None):
     if config is None:
         from tradingagents.dataflows.config import get_config
         config = get_config()
+    rating_guidance = rating_definitions(config)
     reads_reports = config.get('research_manager_reads_reports', True)
     structured_debate = config.get('debate_mode', 'structured') == 'structured'
     schema = (ResearchPlan if reads_reports else CruxResearchPlan) if structured_debate else (EvidenceResearchPlan if reads_reports else LegacyResearchPlan)
@@ -33,7 +34,7 @@ def create_research_manager(llm, config=None):
 
 ---
 
-{RATING_DEFINITIONS}
+{rating_guidance}
 
 The debate always contains conflicting arguments; deciding which side is stronger is the job, so conflict alone is not a reason to Hold. Commit to the side with the stronger case, sized by how decisively it wins. Choose Hold only when the evidence is still balanced after that weighing, or too thin to support a call; do not manufacture a direction to appear decisive. Weigh the bull and bear cases on their merits, independent of which side spoke first or last.
 
@@ -74,7 +75,7 @@ Write these sections, in this order, starting with the recommendation on its own
 {state.get('past_context', '') or '无已结算教训'}
 
 ## 输出要求
-{RATING_DEFINITIONS}
+{rating_guidance}
 冲突本身不构成Hold理由；独立比较证据，选择证据占优方，仅均衡或不足时Hold，不受先后发言影响。
 - **Recommendation**：Buy / Overweight / Hold / Underweight / Sell
 - **Rationale**：≤600字，决定性论据前3条、驳回及原因、不确定性、复评触发。

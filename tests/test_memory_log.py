@@ -93,7 +93,7 @@ def _structured_pm_llm(captured: dict, decision: PortfolioDecision | None = None
     prompt and returns a real PortfolioDecision (so render_pm_decision works).
     """
     if decision is None:
-        decision = PortfolioDecision(
+        decision = PortfolioDecision(direction_change="否",
             rating=PortfolioRating.HOLD,
             executive_summary="Hold the position; await catalyst.",
             investment_thesis="Balanced view; neither side carried the debate.",
@@ -775,7 +775,7 @@ class TestPortfolioManagerInjection:
         downstream consumers (memory log, signal processor, CLI display)
         can parse without any extra LLM call."""
         captured = {}
-        decision = PortfolioDecision(
+        decision = PortfolioDecision(direction_change="否",
             rating=PortfolioRating.OVERWEIGHT,
             executive_summary="Build position gradually over the next two weeks.",
             investment_thesis="AI capex cycle remains intact; institutional flows constructive.",

@@ -31,6 +31,29 @@ RATING_DEFINITIONS = """五档评级定义（单标的标准仓位=100%，不固
 - **Sell**：明确看空，清仓或不建仓。
 观点有分歧本身不是选择Hold的理由；权衡证据后仍均衡或证据不足才使用Hold。"""
 
+# 关闭方向/时机解耦时保留原定义逐字文本。
+LEGACY_RATING_DEFINITIONS = RATING_DEFINITIONS
+RATING_TIMING_INSTRUCTION = (
+    '评级只表达未来5–20个交易日的方向及相对基准超额判断，点位方案只表达执行时机。'
+    '当前无合格入场点或盈亏比不足仅写入entry_plan/add_plan首句“不适用：等待…”及具体价位，不能作为调整评级理由。'
+)
+RATING_DEFINITIONS = """五档评级定义（未来5–20交易日的方向及相对基准超额判断）：
+- **Buy**：明确看多，预期显著正向超额。
+- **Overweight**：偏多，预期正向超额。
+- **Hold**：方向与超额判断中性、证据均衡或不足。
+- **Underweight**：偏空，预期负向超额。
+- **Sell**：明确看空，预期显著负向超额。
+观点有分歧本身不是选择Hold的理由；权衡证据后仍均衡或证据不足才使用Hold。""" + '\n' + RATING_TIMING_INSTRUCTION
+
+
+def rating_definitions(config=None):
+    """按图私有配置选定义，不改变五档枚举和解析口径。"""
+    if config is None:
+        from tradingagents.dataflows.config import get_config
+        config = get_config()
+    return RATING_DEFINITIONS if config.get('rating_timing_decoupled', True) else LEGACY_RATING_DEFINITIONS
+
+
 # Signal emitted when the model's decision has no recognizable rating. It is not
 # a tradeable position: it flags output that needs a human/re-run rather than
 # silently degrading to Hold. Callers that map the signal onto the 5-tier enum

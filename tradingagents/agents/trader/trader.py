@@ -9,8 +9,8 @@ from tradingagents.agents.context import (
     get_language_instruction,
     get_portfolio_context_from_state,
 )
-from tradingagents.agents.rating import RATING_DEFINITIONS
-from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, price_plan_instruction, TraderProposal, render_trader_proposal
+from tradingagents.agents.rating import rating_definitions
+from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, price_plan_instruction, TraderProposal, LegacyTraderProposal, render_trader_proposal
 from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
     bind_structured,
@@ -18,8 +18,14 @@ from tradingagents.agents.structured import (
 )
 
 
-def create_trader(llm):
-    structured_llm = bind_structured(llm, TraderProposal, "Trader")
+def create_trader(llm, config=None):
+    if config is None:
+        from tradingagents.dataflows.config import get_config
+        config = get_config()
+    config = dict(config)
+    direction_lock = config.get('risk_layer_direction_lock', True) or config.get('rating_timing_decoupled', True)
+    schema = TraderProposal if direction_lock else LegacyTraderProposal
+    structured_llm = bind_structured(llm, schema, "Trader")
 
     def trader_node(state):
         company_name = state["company_of_interest"]
@@ -58,8 +64,8 @@ def create_trader(llm):
                     "instrument's quote currency (for example 189.5), never a percentage "
                     "or a range; convert a percentage distance to the price level it "
                     "implies, or omit the field if you cannot state a number. "
-                    + price_plan_instruction()
-                    + RATING_DEFINITIONS
+                    + price_plan_instruction(config)
+                    + rating_definitions(config)
                     + ALLOCATION_INSTRUCTION
                     + NO_EXTERNAL_TOOLS
                     + get_language_instruction(labelled=True)
@@ -83,6 +89,12 @@ def create_trader(llm):
                 ),
             },
         ]
+
+        if direction_lock:
+            messages[0]['content'] = messages[0]['content'].replace(
+                '输出五档动作，与研究经理不同须说明原因；观点有分歧本身不是Hold的理由。 ',
+                '默认沿用研究经理recommendation。只有研究经理未考虑的可核对新证据才允许改变方向；不能凭盈亏比、入场点不足或笼统风险改变。 ')
+            messages[1]['content'] += '\n- **方向变更**：direction_change必填“否”或“是：具体新证据”，包含来源、事实及方向影响。'
 
         trader_plan = invoke_structured_or_freetext(
             structured_llm,

@@ -149,12 +149,12 @@ class GraphSetup:
         bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)
         bear_researcher_node = create_bear_researcher(self.quick_thinking_llm)
         research_manager_node = create_research_manager(self.deep_thinking_llm, self.config)
-        trader_node = create_trader(self.deep_thinking_llm)
+        trader_node = create_trader(self.deep_thinking_llm, self.config)
 
-        aggressive_analyst = create_aggressive_debator(self.quick_thinking_llm)
-        neutral_analyst = create_neutral_debator(self.quick_thinking_llm)
-        conservative_analyst = create_conservative_debator(self.quick_thinking_llm)
-        portfolio_manager_node = create_portfolio_manager(self.deep_thinking_llm)
+        aggressive_analyst = create_aggressive_debator(self.quick_thinking_llm, self.config)
+        neutral_analyst = create_neutral_debator(self.quick_thinking_llm, self.config)
+        conservative_analyst = create_conservative_debator(self.quick_thinking_llm, self.config)
+        portfolio_manager_node = create_portfolio_manager(self.deep_thinking_llm, self.config)
 
         workflow = StateGraph(AgentState)
 

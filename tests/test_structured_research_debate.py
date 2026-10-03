@@ -50,7 +50,7 @@ def test_actual_graph_two_parallel_stages_and_single_stable_join(monkeypatch, sy
     monkeypatch.setattr(graph_setup_module, 'create_research_manager', lambda *args: manager)
     monkeypatch.setattr(graph_setup_module, 'create_trader', lambda *args: lambda state: {'trader_investment_plan': '固定交易计划'})
     for factory, speaker in [('create_aggressive_debator', 'Aggressive'), ('create_conservative_debator', 'Conservative'), ('create_neutral_debator', 'Neutral')]:
-        monkeypatch.setattr(graph_setup_module, factory, lambda model, label=speaker: lambda state: {'risk_debate_state': {**state['risk_debate_state'], 'count': state['risk_debate_state']['count'] + 1, 'latest_speaker': label}})
+        monkeypatch.setattr(graph_setup_module, factory, lambda model, config=None, label=speaker: lambda state: {'risk_debate_state': {**state['risk_debate_state'], 'count': state['risk_debate_state']['count'] + 1, 'latest_speaker': label}})
     monkeypatch.setattr(graph_setup_module, 'create_portfolio_manager', lambda *args: lambda state: {'final_trade_decision': '固定最终计划'})
     import tradingagents.graph.late_news as late
     monkeypatch.setattr(late, 'refresh_news', lambda *args: {})

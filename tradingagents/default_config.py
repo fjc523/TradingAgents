@@ -153,6 +153,9 @@ def build_default_config() -> dict:
         # Internal agent debate stays in English for reasoning quality
         "output_language": "English",
         # Debate and discussion settings
+        "risk_layer_direction_lock": True,
+        "rating_timing_decoupled": True,
+        "price_plan_alt_target": True,
         "debate_mode": "structured",
         "research_manager_reads_reports": True,
         "max_debate_rounds": 1,
