@@ -23,7 +23,7 @@ from tradingagents.agents.context import (
     get_language_instruction,
     get_portfolio_context_from_state,
 )
-from tradingagents.agents.rating import rating_definitions, allocation_instruction, output_flags, flags_for_text, parse_rating
+from tradingagents.agents.rating import rating_definitions, allocation_instruction, output_flags, flags_for_text, direction_flags, parse_rating
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, price_plan_instruction, PortfolioDecision, LegacyPortfolioDecision, render_pm_decision
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS, bind_structured, invoke_structured
 
@@ -33,7 +33,7 @@ def create_portfolio_manager(llm, config=None):
         from tradingagents.dataflows.config import get_config
         config = get_config()
     config = dict(config)
-    direction_lock = config.get('risk_layer_direction_lock', True) or config.get('rating_timing_decoupled', True)
+    direction_lock = config.get('risk_layer_direction_lock', True)
     schema = PortfolioDecision if direction_lock else LegacyPortfolioDecision
     schema = decision_schema(schema, config, "pm")
     structured_llm = bind_structured(llm, schema, "Portfolio Manager")
@@ -114,10 +114,11 @@ Write these sections, in this order, starting with the rating on its own line:
 {lessons_line}
 
 默认沿用研究经理recommendation，不能以交易员改后评级或审阅意见多数替代研究判断。只有研究经理未考虑的新信息才可改变方向：late news补抓、新增数据或审阅人列出的可核对新事实，须注明来源、事实及方向影响。盈亏比、入场点不足和笼统“风险较高”不是依据。
-默认沿用交易员点位，修改须给具体理由。Underweight或Sell不新建仓。执行摘要≤4句、投资论点≤800字、每项点位≤200字。
+默认沿用交易员点位，修改须说明理由。Underweight或Sell不新建仓。执行摘要≤4句、投资论点≤800字、每项点位≤200字。
 {rating_definitions(config)}
 {price_plan_instruction(config)}
 {allocation_instruction(config)}
+## Output
 ## 输出要求
 - **Rating**：Buy / Overweight / Hold / Underweight / Sell
 - **Executive Summary**：方向、配置及如何执行
@@ -128,6 +129,9 @@ Write these sections, in this order, starting with the rating on its own line:
         if config.get("price_plan_evaluation_enabled", True):
             prompt += "\n输出可选stop_loss与first_target绝对价格，保留点位依据；无可靠值留空，不将模糊目标当第一目标。"
         if config.get('rating_timing_decoupled', True):
+            if not direction_lock:
+                prompt=prompt.replace('方案必须与评级一致。','')
+                prompt += '\n'+rating_definitions(config)
             prompt += '\nBuy/Overweight没有合格入场点时保持评级；entry_plan首句写“不适用：等待回踩至 X 或突破 Y 确认”，X/Y均为输入中的具体回踩价和突破价；缺锚点须明确说明缺失，不能编造价位。'
 
         # The typed rating is the decision; the rendered text only carries it.
@@ -160,7 +164,7 @@ Write these sections, in this order, starting with the rating on its own line:
             "risk_debate_state": new_risk_debate_state,
             "final_trade_decision": final_trade_decision,
             "structured_pm_decision": decision.model_dump(mode="json") if decision is not None else None,
-            "decision_flags": {**state.get("decision_flags", {}), "pm": output_flags(decision.model_dump(mode="json"),config,layer="pm") if decision is not None else flags_for_text(final_trade_decision,config,layer="pm")},
+            "decision_flags": {**state.get("decision_flags", {}), "pm": {**(output_flags(decision.model_dump(mode="json"),config,layer="pm") if decision is not None else flags_for_text(final_trade_decision,config,layer="pm")), **direction_flags(state,decision.model_dump(mode="json") if decision is not None else None,layer="pm",text=final_trade_decision)}},
             "final_rating": final_rating,
         }
 

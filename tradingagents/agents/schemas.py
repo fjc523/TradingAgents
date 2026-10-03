@@ -18,6 +18,8 @@ so that:
 
 from __future__ import annotations
 
+import re
+
 from enum import StrEnum
 from typing import Literal
 
@@ -121,12 +123,6 @@ class ResearchPlan(BaseModel):
 LegacyResearchPlan = ResearchPlan
 
 
-class EvidenceResearchPlan(LegacyResearchPlan):
-    """研究经理直接读报告后的引用核对；旧记录允许缺字段。"""
-    evidence_check: str | None = Field(default=None, max_length=200,
-        description='引用核对≤200字：列出辩手引用与报告不符处、双方遗漏的关键事实；没有时写“无”并列已核对的2–3个数据点。')
-
-
 class ResearchCrux(BaseModel):
     """裁判列出的决定性分歧点。"""
     bull_claim: str = Field(description='多方观点及来源条目。')
@@ -136,16 +132,92 @@ class ResearchCrux(BaseModel):
     reason: str = Field(description='胜负或未决的具体理由。')
 
 
-class CruxResearchPlan(LegacyResearchPlan):
-    """结构化辩论的分歧裁决；旧记录允许缺字段。"""
-    cruxes: list[ResearchCrux] | None = Field(default=None, min_length=3, max_length=5,
-        description='先列3–5个分歧点，逐项比较双方主张、报告证据、胜负及理由，再给评级。')
+class EvidenceResearchPlan(BaseModel):
+    """先生成引用核对，再生成评级；不注入关闭的分歧字段。"""
+    evidence_check: str | None = Field(default=None, description='引用核对建议≤200字，超长保留内容并软标记；列出引用不符及遗漏，无则说明核对数据。')
+    recommendation: PortfolioRating = Field(
+        description=(
+            "The investment recommendation. Exactly one of Buy / Overweight / "
+            "Hold / Underweight / Sell. Conflicting arguments alone are not a "
+            "reason to Hold: commit to the stronger side, sized by how "
+            "decisively it wins. Choose Hold only when the evidence is still "
+            "balanced after weighing, or too thin to support a call."
+        ),
+    )
+    rationale: str = Field(
+        description=(
+            "≤600字，按决定性论据前3条（注明来源）、被驳回论据及理由、"
+            "关键不确定性、复评触发条件四部分输出。"
+        ),
+    )
+    strategic_actions: str = Field(
+        description=(
+            "交易员可执行的具体步骤，配置以单标的标准仓位100%为参考单位；"
+            "研究团队未知真实持仓，不把相对目标当作账户资产比例或现有持仓买卖比例。"
+        ),
+    )
+    target_allocation_pct: float | None = Field(
+        default=None, ge=0, description="相对单标的标准仓位100%的目标配置，60表示标准量的六成；依据不足可不提供。",
+    )
 
 
-class ResearchPlan(EvidenceResearchPlan):
-    """默认研究计划增加引用核对和分歧裁决，兼容旧记录。"""
-    cruxes: list[ResearchCrux] | None = Field(default=None, min_length=3, max_length=5,
-        description='先列3–5个分歧点，逐项比较双方主张、报告证据、胜负及理由，再给评级。')
+class CruxResearchPlan(BaseModel):
+    """先生成分歧裁决，再生成评级；不注入关闭的引用核对字段。"""
+    cruxes: list[ResearchCrux] | None = Field(default=None, description='先列3–5个分歧点再给评级；数量越界保留内容并软标记。')
+    recommendation: PortfolioRating = Field(
+        description=(
+            "The investment recommendation. Exactly one of Buy / Overweight / "
+            "Hold / Underweight / Sell. Conflicting arguments alone are not a "
+            "reason to Hold: commit to the stronger side, sized by how "
+            "decisively it wins. Choose Hold only when the evidence is still "
+            "balanced after weighing, or too thin to support a call."
+        ),
+    )
+    rationale: str = Field(
+        description=(
+            "≤600字，按决定性论据前3条（注明来源）、被驳回论据及理由、"
+            "关键不确定性、复评触发条件四部分输出。"
+        ),
+    )
+    strategic_actions: str = Field(
+        description=(
+            "交易员可执行的具体步骤，配置以单标的标准仓位100%为参考单位；"
+            "研究团队未知真实持仓，不把相对目标当作账户资产比例或现有持仓买卖比例。"
+        ),
+    )
+    target_allocation_pct: float | None = Field(
+        default=None, ge=0, description="相对单标的标准仓位100%的目标配置，60表示标准量的六成；依据不足可不提供。",
+    )
+
+
+class ResearchPlan(BaseModel):
+    """默认先生成分歧裁决和引用核对，再生成评级。"""
+    cruxes: list[ResearchCrux] | None = Field(default=None, description='先列3–5个分歧点再给评级；数量越界保留内容并软标记。')
+    evidence_check: str | None = Field(default=None, description='引用核对建议≤200字，超长保留内容并软标记；列出引用不符及遗漏，无则说明核对数据。')
+    recommendation: PortfolioRating = Field(
+        description=(
+            "The investment recommendation. Exactly one of Buy / Overweight / "
+            "Hold / Underweight / Sell. Conflicting arguments alone are not a "
+            "reason to Hold: commit to the stronger side, sized by how "
+            "decisively it wins. Choose Hold only when the evidence is still "
+            "balanced after weighing, or too thin to support a call."
+        ),
+    )
+    rationale: str = Field(
+        description=(
+            "≤600字，按决定性论据前3条（注明来源）、被驳回论据及理由、"
+            "关键不确定性、复评触发条件四部分输出。"
+        ),
+    )
+    strategic_actions: str = Field(
+        description=(
+            "交易员可执行的具体步骤，配置以单标的标准仓位100%为参考单位；"
+            "研究团队未知真实持仓，不把相对目标当作账户资产比例或现有持仓买卖比例。"
+        ),
+    )
+    target_allocation_pct: float | None = Field(
+        default=None, ge=0, description="相对单标的标准仓位100%的目标配置，60表示标准量的六成；依据不足可不提供。",
+    )
 
 
 def render_research_plan(plan: ResearchPlan) -> str:
@@ -306,11 +378,14 @@ LegacyTraderProposal = TraderProposal
 
 
 def _validate_direction_change(value):
-    """只验证声明格式；不替模型生成证据或事后改动作。"""
-    value = value.strip()
-    if value == '否' or (value.startswith('是：') and value[2:].strip()):
-        return value
-    raise ValueError('direction_change必须为“否”或“是：具体新证据”')
+    """归一常见声明标点，不替模型生成证据或改动作。"""
+    value=value.strip().strip('“”\"\'，,。.;；：:!?！？').strip()
+    if value.startswith('否'):
+        return '否'
+    match=re.match(r'^是\s*[:：,，]\s*(.+)$',value,re.DOTALL)
+    if match and match[1].strip():
+        return '是：'+match[1].strip()
+    raise ValueError('direction_change须为“否…”或“是”加冒号/逗号及非空证据')
 
 
 class TraderProposal(LegacyTraderProposal):
@@ -581,9 +656,11 @@ def _probability_value(value):
 from functools import lru_cache
 
 @lru_cache(maxsize=64)
-def _extended_decision_schema(base, prices, probabilities, layer):
+def _extended_decision_schema(base, prices, probabilities, layer, timing):
     """缓存schema类以保持相同开关下工具签名稳定。"""
     fields={};validators={}
+    if timing and layer=='pm':
+        fields['time_horizon']=(str | None,Field(default=None,description='决策方向周期为未来5–20交易日；点位有效期另依输入，不写3–6个月。'))
     if prices and layer!='rm':
         fields['first_target']=(float | None, Field(default=None, description='第一目标的真实数值；无依据不填，不把price_target当第一目标。'))
         numeric=['first_target']
@@ -604,7 +681,7 @@ def _extended_decision_schema(base, prices, probabilities, layer):
 def decision_schema(base, config, layer):
     """每项关闭恢复旧字段；不顺带关闭其他功能。"""
     original=_SCHEMA_BASES.get(base,base)
-    return _extended_decision_schema(original,config.get('price_plan_evaluation_enabled',True),config.get('rating_probability_fields',True),layer)
+    return _extended_decision_schema(original,config.get('price_plan_evaluation_enabled',True),config.get('rating_probability_fields',True),layer,config.get('rating_timing_decoupled',True))
 
 
 def _probability_lines(model):

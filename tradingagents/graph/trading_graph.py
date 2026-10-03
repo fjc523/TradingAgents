@@ -314,6 +314,7 @@ class TradingAgentsGraph:
         resolved instrument identity for every agent (#814). An entry point that
         assembled the state itself would skip the memory log.
         """
+        self._memory_asset_type=asset_type
         self.settle_pending(company_name)
         return self.propagator.create_initial_state(
             company_name,
@@ -326,7 +327,7 @@ class TradingAgentsGraph:
             portfolio_context=portfolio.render(company_name) if portfolio is not None else "",
         )
 
-    def settle_pending(self, company_name):
+    def settle_pending(self, company_name, asset_type=None):
         """Settle this ticker's decisions whose holding window has now traded.
 
         A run settles the ticker's earlier decisions on its way in, so the most
@@ -335,7 +336,7 @@ class TradingAgentsGraph:
         this to settle it now.
         """
         with run_config(self.config):
-            settlement.settle_pending(company_name, self.memory_log, self.reflector, self.config)
+            settlement.settle_pending(company_name, self.memory_log, self.reflector, {**self.config,"asset_type":asset_type or getattr(self,"_memory_asset_type",self.config.get("asset_type","stock"))})
 
     def record_decision(self, company_name, trade_date, final_state):
         """Record a finished run: its state log, and its decision in the memory log

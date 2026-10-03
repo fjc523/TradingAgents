@@ -29,7 +29,7 @@ def test_disabled_original_prompt_and_schema_golden():
     # 基线由改动前72f46ce的原类和原提示独立捕获，不由新实现生成期望值。
     llm = Capture()
     with run_config({'output_language': 'Chinese'}):
-        create_research_manager(llm, {'research_manager_reads_reports': False, 'debate_mode': 'legacy', 'rating_timing_decoupled': False})(fixed_state())
+        create_research_manager(llm, {'research_manager_reads_reports': False, 'debate_mode': 'legacy', 'rating_timing_decoupled': False, 'rating_probability_fields': False, 'allocation_bands': None, 'lesson_min_settled_same_ticker': 0, 'cross_ticker_lessons': 'text', 'sentiment_min_social_posts': 0})(fixed_state())
     assert hashlib.sha256(llm.prompt.encode()).hexdigest() == '847d24dc44c628678f142703ed7546b7860976286e516bdf40a09d3d75b6709d'
     assert hashlib.sha256(json.dumps(llm.schema.model_json_schema(), sort_keys=True).encode()).hexdigest() == 'b2acf3986011ff5bed4da1454ccd3e9699e30f63588320b2e1b8ba551fd1ab25'
     assert 'evidence_check' not in llm.schema.model_fields
@@ -48,7 +48,8 @@ def test_full_reports_in_order_without_truncation(symbol):
     assert llm.prompt.index('辩论记录') > positions[-1]
     assert llm.prompt.index('历史教训') > llm.prompt.index('辩论记录')
     assert '双方都遗漏' in llm.prompt
-    assert llm.schema.model_fields['evidence_check'].metadata
+    assert '200' in llm.schema.model_fields['evidence_check'].description
+    assert not llm.schema.model_fields['evidence_check'].metadata
 
 
 def test_missing_report_explicit_and_old_record_honest():
@@ -63,9 +64,10 @@ def test_missing_report_explicit_and_old_record_honest():
 
 
 def test_evidence_length_limit():
-    from pydantic import ValidationError
-    with pytest.raises(ValidationError):
-        ResearchPlan(recommendation='Hold', rationale='理由', strategic_actions='动作', evidence_check='字' * 201)
+    from tradingagents.agents.rating import output_flags
+    plan = ResearchPlan(recommendation='Hold', rationale='理由', strategic_actions='动作', evidence_check='字' * 201)
+    assert plan.evidence_check == '字' * 201
+    assert output_flags(plan.model_dump(), {}, layer='rm')['evidence_check_overlength'] is True
 
 
 @pytest.mark.parametrize('reads,mode,fields', [(False,'legacy',set()), (True,'legacy',{'evidence_check'}),

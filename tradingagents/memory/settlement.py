@@ -64,7 +64,7 @@ def _by_day(closes):
 
 def fetch_returns(
     ticker: str, trade_date: str, holding_days: int = 5,
-    benchmark: str = "SPY",
+    benchmark: str | None = "SPY",
 ) -> tuple[float | None, float | None, int | None, str | None]:
     """Fetch raw and alpha return for ticker over holding_days from trade_date.
 
@@ -87,7 +87,7 @@ def fetch_returns(
         stock = _by_day(get_closes(ticker, trade_date, end_str))
         # From a week earlier, so the benchmark has a close on or before entry.
         bench_start = (start - timedelta(days=7)).strftime("%Y-%m-%d")
-        bench = _by_day(get_closes(benchmark, bench_start, end_str))
+        bench = _by_day(get_closes(benchmark, bench_start, end_str)) if benchmark is not None else None
 
         # Require the full holding window to have traded. A rerun before it has
         # leaves the entry pending to retry next run, rather than settling on a
@@ -99,13 +99,16 @@ def fetch_returns(
         # last close by each end, so both returns span the same dates even when
         # the calendars differ (a coin trades at weekends, an index does not).
         # It must have traded through the exit, or its close there may yet move.
-        if bench.empty or bench.index[0] > entry or bench.index[-1] < exit_:
+        if benchmark is not None and (bench.empty or bench.index[0] > entry or bench.index[-1] < exit_):
             return None, None, None, None
 
         raw = float((stock.iloc[holding_days] - stock.iloc[0]) / stock.iloc[0])
-        bench_entry, bench_exit = bench.asof(entry), bench.asof(exit_)
-        bench_ret = float((bench_exit - bench_entry) / bench_entry)
-        alpha = raw - bench_ret
+        if benchmark is not None:
+            bench_entry, bench_exit = bench.asof(entry), bench.asof(exit_)
+            bench_ret = float((bench_exit - bench_entry) / bench_entry)
+            alpha = raw - bench_ret
+        else:
+            alpha = None
         # Every close used is known by the exit: the point-in-time cutoff for
         # injecting the lesson (#1251).
         resolution_date = exit_.strftime("%Y-%m-%d")
@@ -133,11 +136,13 @@ def settle_pending(ticker: str, memory_log, reflector, config: dict) -> None:
         return
 
     benchmark = resolve_benchmark(ticker, config)
+    broad={str(value).upper() for value in config.get('broad_market_etfs',['SPY','QQQ','IWM','DIA','VOO','IVV','VTI'])}
+    absolute=config.get('asset_type')=='index' or (config.get('asset_type')=='etf' and ticker.upper() in broad)
     updates = []
     for entry in pending:
         raw, alpha, days, resolution_date = fetch_returns(
             ticker, entry["date"], config.get("holding_period_days", 5),
-            benchmark=benchmark,
+            benchmark=None if absolute else benchmark,
         )
         if raw is None:
             continue  # price not available yet — try again next run
@@ -145,8 +150,8 @@ def settle_pending(ticker: str, memory_log, reflector, config: dict) -> None:
             reflection = reflector.reflect_on_final_decision(
                 final_decision=entry.get("decision", ""),
                 raw_return=raw,
-                alpha_return=alpha,
-                benchmark_name=benchmark,
+                alpha_return=raw if absolute else alpha,
+                benchmark_name="绝对收益" if absolute else benchmark,
                 holding_days=days,
             )
         except LLMNonRecoverableError:
@@ -161,7 +166,7 @@ def settle_pending(ticker: str, memory_log, reflector, config: dict) -> None:
             "ticker": ticker,
             "trade_date": entry["date"],
             "raw_return": raw,
-            "alpha_return": alpha,
+            "alpha_return": raw if absolute else alpha,
             "holding_days": days,
             "reflection": reflection,
             "resolution_date": resolution_date,

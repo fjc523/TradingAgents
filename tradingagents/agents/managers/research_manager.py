@@ -7,7 +7,7 @@ from tradingagents.agents.schemas import decision_schema
 from tradingagents.dataflows.social_result import lesson_reference_instruction
 
 from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction, report_or_absent
-from tradingagents.agents.rating import rating_definitions, allocation_instruction, output_flags, flags_for_text
+from tradingagents.agents.rating import rating_definitions, allocation_instruction, output_flags, flags_for_text, direction_flags
 from tradingagents.agents.schemas import ALLOCATION_INSTRUCTION, ResearchPlan, LegacyResearchPlan, EvidenceResearchPlan, CruxResearchPlan, render_research_plan
 from tradingagents.agents.structured import (
     NO_EXTERNAL_TOOLS,
@@ -80,11 +80,12 @@ Write these sections, in this order, starting with the recommendation on its own
 **历史教训：**
 {state.get('past_context', '') or '无已结算教训'}
 
+## Output
 ## 输出要求
 {rating_guidance}
 冲突本身不构成Hold理由；独立比较证据，选择证据占优方，仅均衡或不足时Hold，不受先后发言影响。
 - **Recommendation**：Buy / Overweight / Hold / Underweight / Sell
-- **Rationale**：≤600字，决定性论据前3条、驳回及原因、不确定性、复评触发。
+- **Rationale**：≤600字，决定性论据前3条、被驳回论据及理由、不确定性、复评触发条件。
 - **Strategic Actions**：给交易员的行动要求。
 - **引用核对**：≤200字，列辩手引用不符处及双方都遗漏但影响结论的事实；无则写“无”并列已核对的2–3个数据点。
 {allocation_instruction(config)}
@@ -117,7 +118,7 @@ Write these sections, in this order, starting with the recommendation on its own
             "investment_debate_state": new_investment_debate_state,
             "investment_plan": investment_plan,
             "structured_research_plan": structured,
-            "decision_flags": {**state.get("decision_flags", {}), "rm": output_flags(structured,config,layer="rm") if structured is not None else flags_for_text(investment_plan,config,layer="rm")},
+            "decision_flags": {**state.get("decision_flags", {}), "rm": {**(output_flags(structured,config,layer="rm") if structured is not None else flags_for_text(investment_plan,config,layer="rm")), **direction_flags(state,structured,layer="rm",text=investment_plan)}},
         }
 
     return research_manager_node

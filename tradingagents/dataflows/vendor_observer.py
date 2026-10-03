@@ -32,7 +32,7 @@ def report_vendor(method, vendor, outcome, *, duration=0, error=None, symbol=Non
         pass
 
 
-def observed_call(method, vendor, impl, *args, observation_symbol=None, **kwargs):
+def observed_call(vendor_method, vendor, impl, *args, observation_symbol=None, **kwargs):
     if _OBSERVER.get() is None:
         return impl(*args, **kwargs)
     from tradingagents.dataflows.errors import VendorNotConfiguredError, NoMarketDataError
@@ -41,7 +41,7 @@ def observed_call(method, vendor, impl, *args, observation_symbol=None, **kwargs
         value = impl(*args, **kwargs)
     except Exception as exc:
         outcome = "unconfigured" if isinstance(exc, VendorNotConfiguredError) else "no_data" if isinstance(exc, NoMarketDataError) else "failed"
-        report_vendor(method, vendor, outcome, duration=perf_counter()-started,
+        report_vendor(vendor_method, vendor, outcome, duration=perf_counter()-started,
                       error=type(exc).__name__+"："+str(exc), symbol=observation_symbol)
         raise
     text = str(value) if isinstance(value, str) else ""
@@ -54,7 +54,7 @@ def observed_call(method, vendor, impl, *args, observation_symbol=None, **kwargs
     # 占位文本本身说明了失败原因（如 HTTP 状态码），直接透传；只有空值才写泛化原因。
     outcome = getattr(value, "source_outcome", outcome)
     reason = getattr(value, "source_reason", None) or (None if outcome == "success" else (text.strip()[:200] or "没有可用数据"))
-    report_vendor(method, vendor, outcome, duration=perf_counter()-started,
+    report_vendor(vendor_method, vendor, outcome, duration=perf_counter()-started,
                   error=reason, symbol=observation_symbol,
                   statement_metadata=getattr(value, "statement_metadata", None))
     return value

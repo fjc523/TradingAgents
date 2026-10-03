@@ -34,15 +34,15 @@ RATING_DEFINITIONS = """五档评级定义（单标的标准仓位=100%，不固
 # 关闭方向/时机解耦时保留原定义逐字文本。
 LEGACY_RATING_DEFINITIONS = RATING_DEFINITIONS
 RATING_TIMING_INSTRUCTION = (
-    '评级只表达未来5–20个交易日的方向及相对基准超额判断，点位方案只表达执行时机。'
+    '评级只表达未来5–20个交易日的方向及主口径收益判断，点位方案只表达执行时机。'
     '当前无合格入场点或盈亏比不足仅写入entry_plan/add_plan首句“不适用：等待…”及具体价位，不能作为调整评级理由。'
 )
-RATING_DEFINITIONS = """五档评级定义（未来5–20交易日的方向及相对基准超额判断）：
-- **Buy**：明确看多，预期显著正向超额。
-- **Overweight**：偏多，预期正向超额。
-- **Hold**：方向与超额判断中性、证据均衡或不足。
-- **Underweight**：偏空，预期负向超额。
-- **Sell**：明确看空，预期显著负向超额。
+RATING_DEFINITIONS = """五档评级定义（未来5–20交易日的方向及主口径收益判断）：
+- **Buy**：明确看多，预期显著正向主口径收益。
+- **Overweight**：偏多，预期正向主口径收益。
+- **Hold**：方向与主口径收益判断中性、证据均衡或不足。
+- **Underweight**：偏空，预期负向主口径收益。
+- **Sell**：明确看空，预期显著负向主口径收益。
 观点有分歧本身不是选择Hold的理由；权衡证据后仍均衡或证据不足才使用Hold。""" + '\n' + RATING_TIMING_INSTRUCTION
 
 
@@ -210,6 +210,13 @@ def output_flags(payload, config, *, layer):
     rating=payload.get('recommendation') or payload.get('action') or payload.get('rating')
     rating=getattr(rating,'value',rating)
     flags={}
+    if layer=='rm':
+        evidence=payload.get('evidence_check')
+        cruxes=payload.get('cruxes')
+        if isinstance(evidence,str) and len(evidence)>200:
+            flags['evidence_check_overlength']=True
+        if isinstance(cruxes,list) and not 3<=len(cruxes)<=5:
+            flags['cruxes_count']=len(cruxes)
     if config.get('rating_probability_fields',True) and layer in ('rm','pm'):
         predicted=probability_rating(payload.get('prob_outperform_20d'))
         flags['rating_prob_mismatch']=bool(predicted is not None and rating is not None and predicted!=rating)
@@ -234,3 +241,22 @@ def flags_for_text(text,config,*,layer):
     probability=re.search(r'(?mi)^\s*\*\*Prob Outperform 20d\*\*\s*[:：]\s*([01](?:\.\d+)?)\s*$',str(text or ''))
     if probability:payload['prob_outperform_20d']=float(probability[1])
     return output_flags(payload,config,layer=layer)
+
+
+def direction_flags(state, payload, *, layer, text=None):
+    """只比明确评级及方向声明；不改值，缺评级不作确定结论。"""
+    def rating(value, label, body):
+        candidate=value.get('recommendation') or value.get('action') or value.get('rating') if isinstance(value,dict) else None
+        candidate=getattr(candidate,'value',candidate)
+        if candidate in RATINGS_5_TIER:return candidate
+        match=re.search(r'(?mi)^\s*\*\*'+label+r'\*\*\s*[:：]\s*(Buy|Overweight|Hold|Underweight|Sell)\b',str(body or ''))
+        return match[1] if match else None
+    current=rating(payload,'Recommendation' if layer=='rm' else 'Action' if layer=='trader' else 'Rating',text)
+    reference=current if layer=='rm' else rating(state.get('structured_research_plan'),'Recommendation',state.get('investment_plan'))
+    if current is None or reference is None:return {}
+    declaration=payload.get('direction_change') if isinstance(payload,dict) else None
+    if declaration is None:
+        match=re.search(r'(?m)^\s*\*\*方向变更\*\*\s*[:：]\s*([^\n]*(?:\n(?!\s*\*\*)[^\n]*)*)',str(text or ''))
+        declaration=match[1].strip() if match else ''
+    yes=bool(re.match(r'^是\s*[:：,，]\s*\S',str(declaration or ''),re.DOTALL))
+    return {'direction_change_mismatch':current!=reference and not yes}

@@ -66,7 +66,7 @@ class TestRenderTraderProposal:
         tell it from a level the trader declined to set."""
         p = TraderProposal(direction_change="否", action=TraderAction.SELL, reasoning="Guidance cut.")
         md = render_trader_proposal(p)
-        for field in ("Entry Price", "Stop Loss", "Position Sizing"):
+        for field in ("Entry Price", "Stop Loss", "Position Sizing", "First Target"):
             assert f"**{field}**: not provided" in md
         assert "FINAL TRANSACTION PROPOSAL: **SELL**" in md
 
@@ -442,6 +442,9 @@ class TestSentimentAnalystAgent:
         this file into a multi-minute hang.
         """
         from tradingagents.agents.analysts import sentiment_analyst as sentiment
+        from tradingagents.dataflows import config
+        # 本组验证评分及回退旧路径；有效帖子门禁由专项测试覆盖。
+        monkeypatch.setattr(config, 'get_config', lambda: {'sentiment_min_social_posts': 0})
 
         monkeypatch.setattr(sentiment, "fetch_stocktwits_messages", lambda *a, **k: "st")
         monkeypatch.setattr(sentiment, "fetch_reddit_posts", lambda *a, **k: "rd")
@@ -543,9 +546,9 @@ def test_the_trader_names_the_levels_it_did_not_give():
     from tradingagents.agents.schemas import TraderAction, TraderProposal, render_trader_proposal
 
     rendered = render_trader_proposal(TraderProposal(direction_change="否", action=TraderAction.HOLD, reasoning="r"))
-    for field in ("Entry Price", "Stop Loss", "Position Sizing"):
+    for field in ("Entry Price", "Stop Loss", "Position Sizing", "First Target"):
         assert field in rendered
-    assert rendered.lower().count("not provided") == 3
+    assert rendered.lower().count("not provided") == 4
 
 
 @pytest.mark.parametrize("rating", ["Overweight", "Underweight"])

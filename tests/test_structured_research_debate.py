@@ -42,7 +42,7 @@ def test_actual_graph_two_parallel_stages_and_single_stable_join(monkeypatch, sy
     llm = ParallelModel() if mode == 'structured' else LegacyModel()
     for factory, field in [('create_market_analyst', 'market_report'), ('create_sentiment_analyst', 'sentiment_report'),
                            ('create_news_analyst', 'news_report'), ('create_fundamentals_analyst', 'fundamentals_report')]:
-        monkeypatch.setattr(graph_setup_module, factory, lambda model, key=field: lambda state: {'messages': [AIMessage('完成')], key: key + ':完整报告'})
+        monkeypatch.setattr(graph_setup_module, factory, lambda model, config=None, key=field: lambda state: {'messages': [AIMessage('完成')], key: key + ':完整报告'})
     seen = []
     def manager(state):
         seen.append(dict(state))
@@ -99,7 +99,7 @@ def test_legacy_prompt_original_golden(factory, digest):
             self.prompt = prompt
             return SimpleNamespace(content='旧路径')
     llm = Capture()
-    with run_config({'output_language': 'Chinese'}):
+    with run_config({'output_language': 'Chinese', 'allocation_bands': None, 'rating_probability_fields': False, 'sentiment_min_social_posts': 0}):
         factory(llm)(fixed_state())
     assert hashlib.sha256(llm.prompt.encode()).hexdigest() == digest
 
@@ -112,6 +112,7 @@ def test_cruxes_render_before_rating_and_old_record_compatibility():
     assert '报告数据1' in text
     old = ResearchPlan(recommendation='Hold', rationale='旧理由', strategic_actions='旧动作')
     assert '未提供；不能视为已裁决' in render_research_plan(old)
-    from pydantic import ValidationError
-    with pytest.raises(ValidationError):
-        ResearchPlan(recommendation='Hold', rationale='理由', strategic_actions='动作', cruxes=[crux] * 2)
+    from tradingagents.agents.rating import output_flags
+    short = ResearchPlan(recommendation='Hold', rationale='理由', strategic_actions='动作', cruxes=[crux] * 2)
+    assert len(short.cruxes) == 2
+    assert output_flags(short.model_dump(), {}, layer='rm')['cruxes_count'] == 2

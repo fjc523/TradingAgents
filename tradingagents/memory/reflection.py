@@ -50,13 +50,13 @@ class Reflector:
         callers that haven't been updated to thread the benchmark through.
         """
         messages = [
-            ("system", self._system_prompt(holding_days)),
+            ("system", self._system_prompt(holding_days).replace("-day alpha", "-day absolute return") if benchmark_name=="绝对收益" else self._system_prompt(holding_days)),
             (
                 "human",
                 (
                     f"Raw return over {holding_days} trading days: {raw_return:+.1%}\n"
-                    f"Alpha vs {benchmark_name}: {alpha_return:+.1%}\n\n"
-                    f"Final Decision:\n{final_decision}"
+                    + (f"绝对收益: {raw_return:+.1%}\n\n" if benchmark_name=="绝对收益" else f"Alpha vs {benchmark_name}: {alpha_return:+.1%}\n\n")
+                    + f"Final Decision:\n{final_decision}"
                 ),
             ),
         ]

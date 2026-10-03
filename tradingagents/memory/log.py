@@ -140,7 +140,7 @@ class TradingMemoryLog:
         facts = {}
         for entry in entries:
             entry['returns'] = {'5': self._return_number(entry.get('alpha'))}
-            entry['basis'] = '旧memory 5日alpha（未证明与C2主口径一致）'
+            entry['basis'] = '旧memory 5日tag收益（可能为超额或绝对，未证明C2口径）'
             facts[(entry['date'], entry['ticker'])] = entry
         if self._outcomes_path and Path(self._outcomes_path).exists():
             try:

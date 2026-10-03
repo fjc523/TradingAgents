@@ -15,7 +15,7 @@ from tradingagents.agents.risk_mgmt.neutral_debator import create_neutral_debato
 from tradingagents.agents.schemas import (TraderProposal, PortfolioDecision, load_trader_proposal,
     load_portfolio_decision, render_trader_proposal, render_pm_decision, price_plan_instruction)
 
-OFF = dict(risk_layer_direction_lock=False, rating_timing_decoupled=False, price_plan_alt_target=False)
+OFF = dict(risk_layer_direction_lock=False, rating_timing_decoupled=False, price_plan_alt_target=False, price_plan_evaluation_enabled=False, rating_probability_fields=False, allocation_bands=None, lesson_min_settled_same_ticker=0, cross_ticker_lessons='text', sentiment_min_social_posts=0)
 BASELINES = {
     'trader': 'becac8b08a195d6def633e5694aa7185138d97de9c7aa72bcc078e2adb8b019b',
     'trader_schema': '7c2cffa549a2f63ff51d75a3a0cbd456996a0720b1812c6ea5be465b16033840',
@@ -84,7 +84,7 @@ def test_private_switch_combinations_and_pm_order(risk, timing, alt):
         llm = Capture(); node = FACTORIES[role](llm, config)
         FACTORIES[role](Capture(), OFF)
         node(fixed_state())
-        assert ('direction_change' in llm.schema.model_fields) == (risk or timing)
+        assert ('direction_change' in llm.schema.model_fields) == ((risk or timing) if role == 'trader' else risk)
         text = json.dumps(llm.prompt, ensure_ascii=False) if isinstance(llm.prompt,list) else llm.prompt
         assert ('目标方法：ATR替代' in text) == alt
         assert ('评级只表达未来5–20' in text) == timing
