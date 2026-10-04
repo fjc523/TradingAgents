@@ -30,6 +30,10 @@ def create_llm_client(
     """
     provider_lower = provider.lower()
 
+    if provider_lower == "claude_exec":
+        from .claude_exec import ClaudeExecClient
+        return ClaudeExecClient(model, base_url, **kwargs)
+
     if provider_lower == "codex_exec":
         from .codex_exec import CodexExecClient
         return CodexExecClient(model, base_url, **kwargs)
@@ -110,6 +114,11 @@ def build_llm_kwargs(config: dict, role: str | None = None) -> dict[str, Any]:
         effort = config.get("anthropic_effort")
         if effort:
             kwargs["effort"] = effort
+
+    elif provider == "claude_exec":
+        kwargs["reasoning_effort"] = "high"
+        for key in ("claude_binary", "claude_timeout", "claude_retries", "claude_max_concurrency", "codex_usage_log_path"):
+            if config.get(key) is not None: kwargs[key] = config[key]
 
     elif provider == "codex_exec":
         role_effort = config.get(f"codex_{role}_reasoning_effort") if role else None

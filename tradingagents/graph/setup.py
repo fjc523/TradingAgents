@@ -114,7 +114,7 @@ class GraphSetup:
         deep_thinking_llm: Any,
         conditional_logic: ConditionalLogic,
         max_tool_rounds: int,
-        config=None,
+        config=None, role_llms=None,
     ):
         """Initialize with required components."""
         self.quick_thinking_llm = quick_thinking_llm
@@ -122,6 +122,7 @@ class GraphSetup:
         self.conditional_logic = conditional_logic
         self.max_tool_rounds = max_tool_rounds
         self.config = dict(config or {})
+        self.role_llms = role_llms or {}
 
     def setup_graph(
         self, selected_analysts=("market", "social", "news", "fundamentals")
@@ -149,15 +150,15 @@ class GraphSetup:
             "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm, self.config),
         }
 
-        bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)
-        bear_researcher_node = create_bear_researcher(self.quick_thinking_llm)
-        research_manager_node = create_research_manager(self.deep_thinking_llm, self.config)
-        trader_node = create_trader(self.deep_thinking_llm, self.config)
+        bull_researcher_node = create_bull_researcher(self.role_llms.get("bull", self.quick_thinking_llm))
+        bear_researcher_node = create_bear_researcher(self.role_llms.get("bear", self.quick_thinking_llm))
+        research_manager_node = create_research_manager(self.role_llms.get("research_manager", self.deep_thinking_llm), self.config)
+        trader_node = create_trader(self.role_llms.get("trader", self.deep_thinking_llm), self.config)
 
-        aggressive_analyst = create_aggressive_debator(self.quick_thinking_llm, self.config)
-        neutral_analyst = create_neutral_debator(self.quick_thinking_llm, self.config)
-        conservative_analyst = create_conservative_debator(self.quick_thinking_llm, self.config)
-        portfolio_manager_node = create_portfolio_manager(self.deep_thinking_llm, self.config)
+        aggressive_analyst = create_aggressive_debator(self.role_llms.get("aggressive", self.quick_thinking_llm), self.config)
+        neutral_analyst = create_neutral_debator(self.role_llms.get("neutral", self.quick_thinking_llm), self.config)
+        conservative_analyst = create_conservative_debator(self.role_llms.get("conservative", self.quick_thinking_llm), self.config)
+        portfolio_manager_node = create_portfolio_manager(self.role_llms.get("portfolio_manager", self.deep_thinking_llm), self.config)
 
         workflow = StateGraph(AgentState)
 
@@ -170,7 +171,7 @@ class GraphSetup:
             from tradingagents.agents.researchers.structured_debate import create_research_turn, join_research_debate
             for side, label in [('bull', 'Bull'), ('bear', 'Bear')]:
                 for phase in ['opening', 'rebuttal']:
-                    workflow.add_node(f'{label} {phase.capitalize()}', create_research_turn(self.quick_thinking_llm, side, phase))
+                    workflow.add_node(f'{label} {phase.capitalize()}', create_research_turn(self.role_llms.get(side, self.quick_thinking_llm), side, phase))
             workflow.add_node('Research Rebuttals', lambda state: {})
             workflow.add_node('Research Debate Summary', join_research_debate)
         else:
@@ -197,7 +198,8 @@ class GraphSetup:
             workflow.add_edge(['Bull Rebuttal', 'Bear Rebuttal'], 'Research Debate Summary')
             workflow.add_edge('Research Debate Summary', 'Research Manager')
         else:
-            workflow.add_edge(analysts, "Bull Researcher")
+            from .role_llms import legacy_first
+            workflow.add_edge(analysts, legacy_first(self.config))
             # 关闭结构化模式保留原有顺序路由。
             for debate_node in ("Bull Researcher", "Bear Researcher"):
                 workflow.add_conditional_edges(debate_node, self.conditional_logic.should_continue_debate, DEBATE_PATH_MAP)

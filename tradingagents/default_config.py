@@ -170,6 +170,10 @@ def build_default_config() -> dict:
         "rating_timing_decoupled": True,
         "price_plan_alt_target": True,
         "debate_mode": "structured",
+        # 第二模型及轮换仅显式配置启用，生产默认保持原路径。
+        "role_llm_overrides": {},
+        "role_llm_scheme": None,
+        "legacy_speaker_rotation": False,
         "research_manager_reads_reports": True,
         "max_debate_rounds": 1,
         "max_risk_discuss_rounds": 1,

@@ -71,6 +71,8 @@ class TradingAgentsGraph:
         self.config = config or DEFAULT_CONFIG
         self.callbacks = callbacks or []
 
+        from .role_llms import validate_role_config
+        validate_role_config(self.config)
         set_config(self.config)
 
         os.makedirs(self.config["data_cache_dir"], exist_ok=True)
@@ -99,6 +101,9 @@ class TradingAgentsGraph:
         self.deep_thinking_llm = deep_client.get_llm()
         self.quick_thinking_llm = quick_client.get_llm()
 
+        from .role_llms import build_role_llms
+        self.role_llms, self.role_llm_metadata = build_role_llms(
+            self.config, self.quick_thinking_llm, self.deep_thinking_llm, self.callbacks)
         self.memory_log = TradingMemoryLog(self.config)
 
         self.conditional_logic = ConditionalLogic(
@@ -118,7 +123,7 @@ class TradingAgentsGraph:
             self.deep_thinking_llm,
             self.conditional_logic,
             max_tool_rounds,
-            config=self.config,
+            config=self.config, **({"role_llms": self.role_llms} if self.role_llms else {}),
         )
 
         self.propagator = Propagator(

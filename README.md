@@ -440,3 +440,14 @@ ETF与指数代理使用etf资产类型；个股使用stock。注入上下文末
 ### T31 概率生成与记忆重跑兼容
 
 开启概率时研究经理各schema在分歧/引用核对后、评级前生成概率三字段，组合经理在评级前生成；关闭概率保留原schema JSON。给评级必须给0–1概率，薄证据向0.5收缩，仅关键输入缺失且评级也无法给出可写不可得原因；旧未知加载不补值。底层 `store_decision(..., replace_pending=True)` 仅供已核验成功live路径原子更新同日同标pending正文和评级；默认不覆盖，失败/不可用/REVIEW、历史backfill与已settled条目不覆盖、不重复计数。
+
+
+### T17 按角色订阅CLI（本项目维护分支）
+
+`role_llm_overrides`默认空、`role_llm_scheme`默认空、`legacy_speaker_rotation`默认false，不改变原quick/deep提示、schema和模型路径。覆盖仅允许bull、bear、research_manager、trader、aggressive、neutral、conservative、portfolio_manager，四分析师及未知角色配置立即报错。Claude仅接受`claude_exec / claude-opus-5-5 / high`；不允许全局Claude分析师provider。方案A按trade_date日期奇偶在bull/aggressive与bear/conservative间互换，方案B覆盖研究经理、交易员、组合经理；显式legacy轮换奇数日bear先发，structured仍保持双方并行opening/rebuttal。
+
+runner直接启动本机Claude二进制，在临时空目录和清理API/provider凭据的环境先只读`auth status`。只有已登录claude.ai、firstParty及支持的订阅类型才发送prompt；Console/API、未登录、坏输出或认证超时不产生模型请求，也不修改登录或全局设置。模型调用关闭用户/项目settings、工具、MCP、自定义指令与持久会话；返回明确用户/项目自定义插件路径时拒绝，内置schema能力不作外部污染。订阅路径与实际model再次从控制输出校验，结构化结果本地验证，无模型/API回落。
+
+记录每角色实际model、configured high及effective `NOT_REPORTED`（CLI未提供运行时字段），不保证服务端没有cap。成功和非零退出都保留返回tokens（含缓存）及目录价估算，缺字段标未知，不写零消费；订阅实际支付金额未知。额度/认证/配置失败不重试，超时/限频/传输仅按显式预算重试，默认0。离线错误分类桩不代表发生过真实额度事件；真实A/B须由调用项目显式测试入口隔离执行，不自动启用生产方案。
+
+认证预检失败仅附安全role/stage/model_requests=0供调用项目区分尝试与实际调用，不创建模型用量行。失败控制输出中的actual_api_providers保留原firstParty/bedrock/vertex等安全路由字段，缺失未知，不能用配置订阅代替观察事实。
