@@ -350,6 +350,9 @@ class TradingAgentsGraph:
         self.memory_log.store_decision(
             ticker=company_name, trade_date=trade_date, final_trade_decision=decision,
             rating=run_rating(final_state),
+            replace_pending=(self.config.get("analysis_mode") == "live" or
+                             (self.config.get("analysis_mode") is None and not is_historical(trade_date)))
+                            and final_state.get("status", "success") in {"success", "completed"},
         )
 
     def _run_graph(self, company_name, trade_date, asset_type: str = "stock",

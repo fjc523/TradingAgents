@@ -137,7 +137,7 @@ Write these sections, in this order, starting with the rating on its own line:
         # The typed rating is the decision; the rendered text only carries it.
         # Read back from text, a rating the thesis quotes could replace it.
         if config.get("rating_probability_fields", True):
-            prompt += "\n输出可选prob_outperform_5d、prob_outperform_20d（0–1）与expected_return_20d_range，每项单列；证据不足明确未知。"
+            prompt += "\n输出可选prob_outperform_5d、prob_outperform_20d（0–1）与expected_return_20d_range，每项单列；给出评级必须给0–1概率数值，证据薄弱向0.5收缩；只有关键输入缺失且连评级都不能给时才写不可得及原因。"
         prompt += lesson_reference_instruction(config)
         prompt += social_absence_instruction(config)
         decision = invoke_structured(structured_llm, prompt, "Portfolio Manager")

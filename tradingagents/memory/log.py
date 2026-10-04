@@ -41,6 +41,7 @@ class TradingMemoryLog:
         trade_date: str,
         final_trade_decision: str,
         rating: str | None = None,
+        *, replace_pending: bool = False,
     ) -> None:
         """Append pending entry at end of propagate(). No LLM call.
 
@@ -50,15 +51,28 @@ class TradingMemoryLog:
         if not self._log_path:
             return
         with locked(self._log_path):
-            # Idempotency guard: fast raw-text scan instead of full parse. Any entry
-            # for this ticker and date blocks another, pending or settled: a re-run
-            # after the outcome landed would otherwise count the same decision twice
-            # in past context and in every aggregate over the log.
+            # 来源默认不允许覆盖；成功live调用者显式授权，仅更新pending。
+            rating = rating or parse_rating(final_trade_decision)
             if self._log_path.exists():
                 raw = self._log_path.read_text(encoding="utf-8")
-                for line in raw.splitlines():
-                    if line.startswith(f"[{trade_date} | {ticker} |") and line.endswith("]"):
+                blocks = raw.split(self._SEPARATOR)
+                prefix = f"[{trade_date} | {ticker} |"
+                matches = [index for index, block in enumerate(blocks)
+                           if block.strip().splitlines() and block.strip().splitlines()[0].startswith(prefix)]
+                if matches:
+                    if not replace_pending or rating not in ('Buy','Overweight','Hold','Underweight','Sell') or not final_trade_decision.strip():
                         return
+                    if any(not blocks[index].strip().splitlines()[0].endswith('| pending]') for index in matches):
+                        return
+                    # settled块原文及分隔符保持；原子替换正文和评级，不新增计数。
+                    for index in matches:
+                        blocks[index] = f"[{trade_date} | {ticker} | {rating} | pending]\n\nDECISION:\n{final_trade_decision}"
+                    updated = self._SEPARATOR.join(blocks)
+                    if updated != raw:
+                        temporary = self._log_path.with_suffix('.tmp')
+                        temporary.write_text(updated, encoding='utf-8')
+                        temporary.replace(self._log_path)
+                    return
             rating = rating or parse_rating(final_trade_decision)
             tag = f"[{trade_date} | {ticker} | {rating} | pending]"
             entry = f"{tag}\n\nDECISION:\n{final_trade_decision}{self._SEPARATOR}"

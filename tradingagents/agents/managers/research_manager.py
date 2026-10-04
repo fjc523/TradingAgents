@@ -96,7 +96,7 @@ Write these sections, in this order, starting with the recommendation on its own
             prompt += '\n先输出3–5个分歧点裁决（cruxes），每项列多方主张、空方主张、决定性报告证据、胜方/未决及理由，再输出评级。不得凭发言顺序判胜负。'
 
         if config.get("rating_probability_fields", True):
-            prompt += "\n输出可选prob_outperform_5d、prob_outperform_20d（0–1）与expected_return_20d_range，每项单列；证据不足明确未知。"
+            prompt += "\n输出可选prob_outperform_5d、prob_outperform_20d（0–1）与expected_return_20d_range，每项单列；给出评级必须给0–1概率数值，证据薄弱向0.5收缩；只有关键输入缺失且连评级都不能给时才写不可得及原因。"
         prompt += lesson_reference_instruction(config)
         investment_plan, structured = invoke_decision(
             structured_llm,

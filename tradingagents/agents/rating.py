@@ -143,6 +143,9 @@ def is_review(signal: str) -> bool:
     return signal == RATING_REVIEW
 
 
+PROBABILITY_BANDS = (('Sell',0.,.35),('Underweight',.35,.45),('Hold',.45,.55),('Overweight',.55,.65),('Buy',.65,1.))
+
+
 def probability_rating(value):
     """用户确认的20日主口径跑赢概率边界；缺值不归档。"""
     import math
@@ -152,12 +155,12 @@ def probability_rating(value):
         return None
     if not math.isfinite(probability) or not 0<=probability<=1:
         return None
-    return 'Buy' if probability>=.65 else 'Overweight' if probability>=.55 else 'Hold' if probability>=.45 else 'Underweight' if probability>=.35 else 'Sell'
+    return next(rating for rating, low, high in PROBABILITY_BANDS if low <= probability < high or (rating == 'Buy' and probability == 1))
 
 
 PROBABILITY_INSTRUCTION = ('以P=P(20个交易日主口径收益>0)先估计概率再选评级：Buy P≥0.65；Overweight 0.55≤P<0.65；Hold 0.45≤P<0.55；Underweight 0.35≤P<0.45；Sell P<0.35。'
     '个股/行业ETF主口径为对SPY超额，宽基/指数为绝对收益；概率反映不确定性，证据薄弱向0.5收缩。'
-    '缺证据不伪造精度。')
+    '给出评级时必须给出0–1的概率数值；只有关键输入缺失、连评级都无法给出时才可写不可得并说明原因。缺证据不伪造精度，旧未知记录不补值。')
 
 
 DEFAULT_ALLOCATION_BANDS = {
