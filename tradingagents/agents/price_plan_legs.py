@@ -4,6 +4,7 @@ import re
 import unicodedata
 
 from pydantic import BaseModel, Field
+from typing import Literal
 
 
 class BuyLeg(BaseModel):
@@ -12,7 +13,7 @@ class BuyLeg(BaseModel):
     status: str | None = Field(default=None, description='可执行、待触发或仅观察')
     zone_low: float | None = None
     zone_high: float | None = None
-    trigger_rule: str | None = Field(default=None, description='触及区间或收盘站上')
+    trigger_rule: Literal['触及区间', '收盘站上'] | None = Field(default=None, description='触及区间或收盘站上')
     trigger_price: float | None = None
     confirm_days: int | None = Field(default=None, description='收盘连续确认1或2日')
     stop_loss: float | None = None
@@ -21,6 +22,7 @@ class BuyLeg(BaseModel):
     target_method: str | None = Field(default=None, description='阻力位或ATR替代')
     target_anchor: str | None = None
     reason: str | None = Field(default=None, description='≤120字，依据或未通过检查')
+    preconditions: str | None = Field(default=None, description='≤80字，非价格前置条件、事件窗口或期限兜底；没有留空')
 
 
 class ReduceLeg(BaseModel):
@@ -28,10 +30,12 @@ class ReduceLeg(BaseModel):
     kind: str | None = Field(default=None, description='超配回落或风险减配')
     zone_low: float | None = None
     zone_high: float | None = None
-    trigger_rule: str | None = Field(default=None, description='进入区间受阻、收盘跌破、立即或其他条件')
+    trigger_rule: Literal['进入区间受阻', '收盘跌破', '立即', '其他条件'] | None = Field(default=None, description='进入区间受阻、收盘跌破、立即或其他条件')
     trigger_price: float | None = None
     post_allocation_pct: float | None = Field(default=None, description='风险减配必填减后配置；超配回落为目标配置')
     reason: str | None = None
+    confirm_days: int | None = Field(default=None, description='收盘类规则连续确认1或2日；其他规则留空')
+    preconditions: str | None = Field(default=None, description='≤80字，非价格前置条件、事件窗口或期限兜底；没有留空')
 
 
 _ENUMS = {
@@ -59,9 +63,17 @@ def soft_direction(value):
             evidence = tail.lstrip(' \t\r\n:：,，。.;；—–-')
             # 仅去除完整成对外括号；不删除证据内部或不成对标点。
             for left, right in (('（', '）'), ('(', ')')):
-                if evidence.startswith(left) and evidence.endswith(right):
-                    evidence = evidence[1:-1].strip()
-                    break
+                if evidence.startswith(left):
+                    depth = 0
+                    paired_at = None
+                    for index, char in enumerate(evidence):
+                        depth += (char == left) - (char == right)
+                        if depth == 0:
+                            paired_at = index
+                            break
+                    if paired_at == len(evidence) - 1:
+                        evidence = evidence[1:-1].strip()
+                        break
             if evidence.strip('）) \t\r\n'):
                 return '是：' + evidence.strip()
     return value
@@ -72,7 +84,8 @@ def normalize_legs(payload):
     if not isinstance(payload, dict):
         return payload
     result = dict(payload)
-    flags = []
+    flags = [item for item in result.get('leg_validation_flags', []) if isinstance(item, str)] if isinstance(result.get('leg_validation_flags'), list) else []
+    raw_values = {key: str(value)[:80] for key, value in result.get('leg_validation_raw', {}).items()} if isinstance(result.get('leg_validation_raw'), dict) else {}
     for name, enums in _ENUMS.items():
         values = result.get(name)
         if values is None:
@@ -116,11 +129,17 @@ def normalize_legs(payload):
                         normalized = None
                     if normalized is None:
                         flags.append(prefix + '.' + field + ':invalid_value')
+                        raw_values[prefix + '.' + field] = str(raw)[:80]
                 leg[field] = normalized
             if leg.get('zone_low') is not None and leg.get('zone_high') is not None and leg['zone_low'] > leg['zone_high']:
                 flags.append(prefix + ':zone_inverted')
             if len(leg.get('reason') or '') > 120 and name == 'buy_legs':
                 flags.append(prefix + ':reason_long')
+            if len(leg.get('preconditions') or '') > 80:
+                flags.append(prefix + ':preconditions_long')
+            expected_trigger = {'可执行': '触及区间', '待触发': '收盘站上'}.get(leg.get('status'))
+            if name == 'buy_legs' and expected_trigger and leg.get('trigger_rule') is not None and leg['trigger_rule'] != expected_trigger:
+                flags.append(prefix + ':trigger_status_mismatch')
             legs.append(leg)
         result[name] = legs
     if 'direction_change' in result:
@@ -129,7 +148,8 @@ def normalize_legs(payload):
         if normalized != '否' and not (normalized.startswith('是：') and any(unicodedata.category(char)[0] not in ('P', 'Z', 'C') for char in normalized[2:])):
             flags.append('direction_change:missing_evidence' if str(raw).strip() == '是' else 'direction_change:invalid_format')
         result['direction_change'] = normalized
-    result['leg_validation_flags'] = flags
+    result['leg_validation_flags'] = list(dict.fromkeys(flags))
+    result['leg_validation_raw'] = raw_values
     return result
 
 
@@ -156,6 +176,8 @@ def legs_instruction(config=None):
     return LEGS_INSTRUCTION.replace('与目标相差小于配置容差视为达标、不动', note) + (
         'stop_anchor、target_anchor必须使用输入锚点表的键名（例如P_Low、close_50_sma、20d_High）；'
         '未知锚点不得猜测对应键名，ATR替代明确写目标方法。'
+        'trigger_rule只填枚举值本身；价格写trigger_price，确认天数写confirm_days，其他条件写preconditions或原文。'
+        'preconditions只写非价格前置条件、事件窗口或期限兜底，≤80字；没有就留空。风险减配的收盘规则用confirm_days写连续1–2日确认。'
     )
 
 
@@ -170,8 +192,19 @@ def render_legs(model):
     lines = ['', '', '**执行条件**']
     for leg in buy:
         zone = val(leg.zone_low) + '–' + val(leg.zone_high)
-        trigger = (f'收盘站上{val(leg.trigger_price)}（{val(leg.confirm_days, price=False)}日）后 ' if leg.trigger_rule == '收盘站上' else '触及区间 ')
-        lines.append(f'- 买入·{val(leg.kind)}｜{val(leg.status)}｜{trigger}{zone}｜止损{val(leg.stop_loss)}（{val(leg.stop_anchor)}）｜目标{val(leg.first_target)}（{val(leg.target_method)}）｜{leg.reason or ""}')
+        trigger = (f'收盘站上{val(leg.trigger_price)}（连续{val(leg.confirm_days, price=False)}日）后 ' if leg.status == '待触发'
+                   else {'可执行': '触及区间 ', '仅观察': '仅观察 '}.get(leg.status, '状态未提供 '))
+        expected = {'可执行': '触及区间', '待触发': '收盘站上'}.get(leg.status)
+        if expected and leg.trigger_rule is not None and leg.trigger_rule != expected:
+            trigger += '（触发规则与状态不一致）'
+        condition = '｜前置条件：' + leg.preconditions if leg.preconditions else ''
+        lines.append(f'- 买入·{val(leg.kind)}｜{val(leg.status)}｜{trigger}{zone}｜止损{val(leg.stop_loss)}（{val(leg.stop_anchor)}）｜目标{val(leg.first_target)}（{val(leg.target_method)}）｜{leg.reason or ""}{condition}')
     for leg in reduce:
-        lines.append(f'- {val(leg.kind)}｜{val(leg.trigger_rule)}{val(leg.trigger_price)}｜{val(leg.zone_low)}–{val(leg.zone_high)}｜减至{val(leg.post_allocation_pct, price=False)}%｜{leg.reason or ""}')
+        trigger = leg.trigger_rule or '触发未提供'
+        if leg.trigger_price is not None:
+            trigger += ' ' + val(leg.trigger_price)
+        if leg.trigger_rule == '收盘跌破':
+            trigger += f'（连续{val(leg.confirm_days, price=False)}日）'
+        condition = '｜前置条件：' + leg.preconditions if leg.preconditions else ''
+        lines.append(f'- {val(leg.kind)}｜{trigger}｜{val(leg.zone_low)}–{val(leg.zone_high)}｜减至{val(leg.post_allocation_pct, price=False)}%｜{leg.reason or ""}{condition}')
     return '\n'.join(lines)

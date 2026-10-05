@@ -198,6 +198,10 @@ class CodexExecChatModel(BaseChatModel):
 
 
 def _validate_arguments(value: Any, schema: dict[str, Any], path: str, definitions=None) -> None:
+    from .schemas import _DecisionLegSchema
+    if isinstance(schema, _DecisionLegSchema):
+        value = schema.validation_projection(value)
+        schema = dict(schema)
     definitions = definitions or {}
     if "$ref" in schema:
         ref = schema["$ref"]
@@ -231,6 +235,7 @@ def _validate_arguments(value: Any, schema: dict[str, Any], path: str, definitio
         "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
         "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
         "boolean": lambda v: isinstance(v, bool),
+        "null": lambda v: v is None,
     }
     if expected in matches and not matches[expected](value):
         raise CodexOutputFormatError(f"{path} 类型应为 {expected}")

@@ -54,6 +54,9 @@ def observed_call(vendor_method, vendor, impl, *args, observation_symbol=None, *
     # 占位文本本身说明了失败原因（如 HTTP 状态码），直接透传；只有空值才写泛化原因。
     outcome = getattr(value, "source_outcome", outcome)
     reason = getattr(value, "source_reason", None) or (None if outcome == "success" else (text.strip()[:200] or "没有可用数据"))
+    if getattr(value, '_daily_live_information_cutoff', None) and outcome != 'success':
+        from tradingagents.dataflows.social_result import live_social_reason
+        reason = getattr(value, '_daily_live_display_reason', None) or live_social_reason(value)
     report_vendor(vendor_method, vendor, outcome, duration=perf_counter()-started,
                   error=reason, symbol=observation_symbol,
                   statement_metadata=getattr(value, "statement_metadata", None))

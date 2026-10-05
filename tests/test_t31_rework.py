@@ -20,12 +20,13 @@ def test_actual_generation_order(base,layer):
     schema=decision_schema(base,{},layer)
     for payload in [schema.model_json_schema(),schema_for(schema)]:
         order=list(payload['properties'])
+        assert 'leg_validation_flags' not in order and 'leg_validation_raw' not in order
         probability_fields=['prob_outperform_5d','prob_outperform_20d','expected_return_20d_range']
         rating='recommendation' if layer=='rm' else 'rating'
         assert order[order.index(rating)-3:order.index(rating)]==probability_fields
         for evidence in ('cruxes','evidence_check'):
             if evidence in order:assert order.index(evidence)<order.index(probability_fields[0])
-    assert [name for name in schema.model_fields if name != 'leg_validation_flags']==list(schema.model_json_schema()['properties'])
+    assert [name for name in schema.model_fields if name not in {'leg_validation_flags', 'leg_validation_raw'}]==list(schema.model_json_schema()['properties'])
 
 
 # 修改前d868bdb的JSON全文SHA256，同其他开关逐字比较，不能仅比较字段集合。

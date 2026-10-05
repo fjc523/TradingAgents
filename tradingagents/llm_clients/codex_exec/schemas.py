@@ -3,6 +3,39 @@
 from __future__ import annotations
 
 from typing import Any
+import json
+
+
+class _DecisionLegSchema(dict):
+    """JSON仍是严格生成契约；私有属性仅绑定真实决策模型的既有腿软验收。"""
+
+    def __init__(self, strict, model):
+        super().__init__(strict)
+        self._leg_models = {name: model.model_fields[name].annotation for name in ('buy_legs', 'reduce_legs')}
+        self._strict_snapshot = json.dumps(strict, sort_keys=True, ensure_ascii=False)
+
+    def validation_projection(self, value):
+        from .errors import CodexOutputFormatError
+        from tradingagents.agents.price_plan_legs import normalize_legs, BuyLeg, ReduceLeg
+        if json.dumps(self, sort_keys=True, ensure_ascii=False) != self._strict_snapshot:
+            raise CodexOutputFormatError('决策schema已改变，腿软合同不可复用')
+        if not isinstance(value, dict):
+            return value
+        props = self.get('properties', {})
+        # 顶层required与全部未知属性必须在归一补字段/删除字段之前验证。
+        missing = set(self.get('required', [])) - set(value)
+        unknown = set(value) - set(props)
+        if missing or unknown:
+            raise CodexOutputFormatError(f'决策参数缺失或未知：missing={sorted(missing)}, unknown={sorted(unknown)}')
+        for name, leg_model in (('buy_legs', BuyLeg), ('reduce_legs', ReduceLeg)):
+            legs = value.get(name)
+            if isinstance(legs, list):
+                for leg in legs:
+                    if isinstance(leg, dict) and (extra := set(leg) - set(leg_model.model_fields)):
+                        raise CodexOutputFormatError(f'{name} 包含未知参数：{sorted(extra)}')
+        normalized = normalize_legs({name: value.get(name) for name in self._leg_models})
+        # 非腿字段完整保留原值；原输出不改，随后模型before校验才能留raw及flags。
+        return {**value, **{name: normalized[name] for name in self._leg_models}}
 
 
 CONTENT_SCHEMA = {
@@ -98,7 +131,13 @@ def schema_for(schema: Any) -> dict[str, Any]:
             raw = schema
         else:
             raise TypeError(f"不支持的结构化输出 schema：{schema!r}")
-        return strict_schema(raw)
+        strict = strict_schema(raw)
+        # dict输入、普通工具、RM及关闭腿模型不拥有受信类型身份。
+        if isinstance(schema, type):
+            from tradingagents.agents.schemas import _LEG_DECISION_MODELS
+            if schema in _LEG_DECISION_MODELS:
+                return _DecisionLegSchema(strict, schema)
+        return strict
     except (TypeError, ValueError):
         return {
             "type": "object",

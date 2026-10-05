@@ -222,6 +222,8 @@ def output_flags(payload, config, *, layer):
     flags={}
     if payload.get('leg_validation_flags'):
         flags['leg_validation_flags'] = payload['leg_validation_flags']
+    if payload.get('leg_validation_raw'):
+        flags['leg_validation_raw'] = payload['leg_validation_raw']
     if layer=='rm':
         evidence=payload.get('evidence_check')
         cruxes=payload.get('cruxes')

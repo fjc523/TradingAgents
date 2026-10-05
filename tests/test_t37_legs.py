@@ -58,7 +58,7 @@ def test_render_execution_after_reduction_only_for_nonempty_legs():
                    'zone_low':201.99,'zone_high':204.9,'stop_loss':190.33,'first_target':239.87}])
     text=render_trader_proposal(new)
     assert text.index('**减仓点位**') < text.index('**执行条件**') < text.index('**目标配置')
-    assert '收盘站上201.99（1日）后' in text
+    assert '收盘站上201.99（连续1日）后' in text
 
 
 @pytest.mark.parametrize('layer', ['trader', 'pm'])

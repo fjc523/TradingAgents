@@ -712,6 +712,10 @@ def _probability_value(value):
 
 
 from functools import lru_cache
+from weakref import WeakSet
+
+# 只登记本模块创建且启用腿软合同的真实决策模型，供生成前绑定运行期边界。
+_LEG_DECISION_MODELS = WeakSet()
 
 @lru_cache(maxsize=64)
 def _extended_decision_schema(base, prices, probabilities, layer, timing, legs=False):
@@ -720,6 +724,7 @@ def _extended_decision_schema(base, prices, probabilities, layer, timing, legs=F
     if legs and layer != 'rm':
         # 软诊断属于运行期元数据，不进入模型的生成schema。
         fields['leg_validation_flags']=(SkipJsonSchema[list[str]], Field(default_factory=list))
+        fields['leg_validation_raw']=(SkipJsonSchema[dict[str, str]], Field(default_factory=dict))
         validators['_leg_input']=model_validator(mode='before')(classmethod(lambda cls, value: normalize_legs(value)))
         if 'direction_change' in base.model_fields:
             validators['_direction_format']=field_validator('direction_change')(classmethod(lambda cls,value:value))
@@ -747,6 +752,8 @@ def _extended_decision_schema(base, prices, probabilities, layer, timing, legs=F
     if not fields:
         return base
     model = create_model(base.__name__+'OptionalFields',__base__=base,__validators__=validators,**fields)
+    if legs and layer in ('trader', 'pm'):
+        _LEG_DECISION_MODELS.add(model)
     if probabilities and layer in ('rm','pm'):
         # 显式重建实际生成顺序，继承新增字段不能留在评级之后。
         probability_fields = ('prob_outperform_5d','prob_outperform_20d','expected_return_20d_range')

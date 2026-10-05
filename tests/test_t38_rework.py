@@ -24,7 +24,7 @@ def test_o1_render_prices_two_decimal_but_days_and_allocation_keep_units():
         'zone_low':12345.67,'zone_high':12345.678,'stop_loss':12300,'first_target':12500}],
         reduce_legs=[{'kind':'风险减配','trigger_price':12300,'post_allocation_pct':60}])
     text=render_legs(model)
-    assert '12345.67（2日）' in text and '12345.67–12345.68' in text
+    assert '12345.67（连续2日）' in text and '12345.67–12345.68' in text
     assert '止损12300.00' in text and '目标12500.00' in text and '减至60%' in text
     assert model.buy_legs[0].zone_high==12345.678
 

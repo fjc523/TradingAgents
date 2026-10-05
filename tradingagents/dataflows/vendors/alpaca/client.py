@@ -81,13 +81,17 @@ class AlpacaClient:
             )
         return {"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret}
 
-    def _get(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
+    def _get(self, url: str, params: dict[str, Any], *, timeout=20, retries=3, request_limiter=None) -> dict[str, Any]:
         headers = self.headers
-        for attempt in range(4):
+        for attempt in range(retries + 1):
             self._limiter.acquire()
+            if request_limiter is not None:
+                request_limiter.acquire()
             try:
-                response = self.session.get(url, params=params, headers=headers, timeout=20)
+                response = self.session.get(url, params=params, headers=headers, timeout=timeout)
             except requests.RequestException as exc:
+                if timeout == 10 and attempt < retries:
+                    continue
                 raise VendorUnavailableError(f"Alpaca 请求失败：{type(exc).__name__}") from exc
             remaining = response.headers.get("X-Ratelimit-Remaining")
             try:
@@ -96,8 +100,8 @@ class AlpacaClient:
                 self._rate_limit_remaining = None
             if response.status_code == 429:
                 logger.warning("Alpaca 返回 HTTP 429，等待限流重置后重试")
-                if attempt >= 3:
-                    raise VendorUnavailableError("Alpaca HTTP 429，重试三次后仍受限")
+                if attempt >= retries:
+                    raise VendorUnavailableError("Alpaca HTTP 429，重试三次后仍受限" if retries == 3 else f"Alpaca HTTP 429，重试{retries}次后仍受限")
                 reset = response.headers.get("X-Ratelimit-Reset")
                 try:
                     delay = max(0, float(reset) - self._clock()) if reset else 1.0
@@ -109,6 +113,8 @@ class AlpacaClient:
                 response.raise_for_status()
                 body = response.json()
             except (requests.RequestException, ValueError) as exc:
+                if timeout == 10 and attempt < retries:
+                    continue
                 raise VendorUnavailableError(
                     f"Alpaca HTTP {response.status_code}：{type(exc).__name__}"
                 ) from exc
@@ -126,9 +132,13 @@ class AlpacaClient:
         feed: str = "sip",
         adjustment: str = "all",
         timeframe: str = "1Day",
+        timeout: float | None = None,
+        retries: int = 1,
+        max_pages: int | None = None,
+        request_limiter: Any = None,
     ) -> dict[str, list[dict[str, Any]]]:
-        if feed not in {"sip", "iex"}:
-            raise ValueError("Alpaca bars feed must be 'sip' or 'iex'")
+        if feed not in {"sip", "iex", "boats"} or (feed == 'boats' and timeframe.lower() not in {'1min', '1m'}):
+            raise ValueError("Alpaca bars feed must be 'sip' or 'iex'；boats仅用于1Min，overnight仅为快照")
         start_dt = _as_datetime(start)
         end_dt = _as_datetime(end)
         if not isinstance(end, datetime) and len(str(end)) == 10:
@@ -139,19 +149,26 @@ class AlpacaClient:
         params: dict[str, Any] = {
             "symbols": ",".join(symbols), "start": start_dt.isoformat(),
             "end": end_dt.isoformat(), "timeframe": timeframe,
-            "feed": feed, "adjustment": adjustment, "sort": "asc", "limit": 10000,
+            "feed": feed, "adjustment": adjustment, "sort": "asc", "limit": 1000 if timeout is not None else 10000,
         }
         rows: dict[str, list[dict[str, Any]]] = {symbol: [] for symbol in symbols}
         token = None
+        seen_tokens, pages = set(), 0
         while True:
+            if max_pages is not None and pages >= max_pages:
+                raise VendorUnavailableError('Alpaca分钟分页预算耗尽，不能作为完整累计量')
             if token:
                 params["page_token"] = token
-            body = self._get(f"{_DATA_URL}/v2/stocks/bars", params)
+            body = self._get(f"{_DATA_URL}/v2/stocks/bars", params, timeout=timeout, retries=retries, request_limiter=request_limiter) if timeout is not None else self._get(f"{_DATA_URL}/v2/stocks/bars", params)
+            pages += 1
             for symbol, bars in (body.get("bars") or {}).items():
                 rows.setdefault(symbol, []).extend(bars or [])
             token = body.get("next_page_token")
             if not token:
                 break
+            if token in seen_tokens:
+                raise VendorUnavailableError('Alpaca分页token循环')
+            seen_tokens.add(token)
         return rows
 
     def get_snapshots(

@@ -84,7 +84,11 @@ def create_sentiment_analyst(llm, config=None):
         if minimum > 0 and (not getattr(stocktwits_block, 'available', False) or getattr(stocktwits_block, 'effective_posts', 0) == 0) and getattr(reddit_block, 'effective_posts', 0) < minimum:
             stock_reason = 'StockTwits 停用' if not config.get('stocktwits_enabled', True) else 'StockTwits 不可用'
             if not getattr(reddit_block, 'available', False):
-                reddit_reason = getattr(reddit_block, 'reason', None) or getattr(reddit_block, 'source_reason', None) or str(reddit_block)
+                if getattr(reddit_block, '_daily_live_information_cutoff', None) and callable(config.get('_daily_live_information_clock')):
+                    from tradingagents.dataflows.social_result import live_social_reason
+                    reddit_reason = live_social_reason(reddit_block)
+                else:
+                    reddit_reason = getattr(reddit_block, 'reason', None) or getattr(reddit_block, 'source_reason', None) or str(reddit_block)
                 reason = f"{stock_reason}；Reddit 获取失败（{reddit_reason}），非无讨论"
             else:
                 reason = f"{stock_reason}；Reddit 正常（{getattr(reddit_block, 'effective_posts', 0)} 条）；提及本标的的有效帖不足门槛 {minimum} 条"
