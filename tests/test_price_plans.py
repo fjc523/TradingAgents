@@ -44,7 +44,8 @@ def test_zero_allocation_and_research_handoff_use_same_unit():
 def test_price_schema_and_prompt_share_fixed_first_sentence():
     """三类方案首句格式在提示和实际schema中一致。"""
     assert "区间 X–Y 美元（依据：" in PRICE_PLAN_INSTRUCTION
-    assert "不适用：原因" in PRICE_PLAN_INSTRUCTION
+    from tradingagents.agents.schemas import price_plan_instruction
+    assert '不适用：原因' in price_plan_instruction({'price_plan_legs':False,'price_plan_target_rule':'d1'})
     for schema in (TraderProposal, PortfolioDecision):
         for name in ("entry_plan", "add_plan", "reduce_plan"):
             desc = schema.model_fields[name].description
@@ -56,9 +57,9 @@ def test_price_rules_use_runtime_config_without_changing_compatibility_constant(
     from tradingagents.dataflows.config import set_config
     from tradingagents.default_config import DEFAULT_CONFIG
     assert price_plan_instruction(DEFAULT_CONFIG) == PRICE_PLAN_INSTRUCTION
-    set_config({"price_plan_stop_atr_min": 1.2, "price_plan_stop_atr_normal": [1.6, 2.1],
+    set_config({"price_plan_legs":False,"price_plan_target_rule":"d1","price_plan_stop_atr_min": 1.2, "price_plan_stop_atr_normal": [1.6, 2.1],
                 "price_plan_stop_atr_max": 2.6, "price_plan_min_reward_risk": 2})
     text = price_plan_instruction()
     assert "1.2–2.6倍ATR" in text and "1.6–2.1倍" in text
     assert "建仓/加仓要求≥2" in text and "区间上沿" in text
-    assert "1–2.5倍ATR" in PRICE_PLAN_INSTRUCTION
+    assert "1–2.5ATR" in PRICE_PLAN_INSTRUCTION

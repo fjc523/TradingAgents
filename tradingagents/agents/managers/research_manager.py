@@ -97,6 +97,33 @@ Write these sections, in this order, starting with the recommendation on its own
 
         if config.get("rating_probability_fields", True):
             prompt += "\n输出可选prob_outperform_5d、prob_outperform_20d（0–1）与expected_return_20d_range，每项单列；给出评级必须给0–1概率数值，证据薄弱向0.5收缩；只有关键输入缺失且连评级都不能给时才写不可得及原因。"
+        if config.get('price_plan_legs', True):
+            prompt = prompt.replace('输出可选prob_outperform_', '输出prob_outperform_')
+            # 新分支实际输出列表先证据和概率；旧分支完整保留原顺序。
+            start = prompt.index('## Output')
+            end = prompt.index(allocation_instruction(config), start)
+            original_lines = prompt[start:end].splitlines()
+            sections = {}
+            retained = []
+            for line in original_lines:
+                key = next((name for name in ('Recommendation', 'Rationale', 'Strategic Actions', '引用核对')
+                            if line.startswith('- **' + name + '**')), None)
+                if key:
+                    sections[key] = line
+                else:
+                    retained.append('按以下顺序输出：' if line.startswith('Write these sections, in this order,') else line)
+            # 保留原列表全部语义以及评级指南/证据裁决要求，仅移动原有条目。
+            ordered = []
+            if structured_debate:
+                ordered.append('- **分歧点裁决**：先列3–5个分歧点与证据裁决。')
+            if '引用核对' in sections:
+                ordered.append(sections['引用核对'])
+            if config.get('rating_probability_fields', True):
+                ordered.append('- **概率**：prob_outperform_5d、prob_outperform_20d（0–1）与expected_return_20d_range。')
+            ordered.extend(sections[name] for name in ('Recommendation', 'Rationale', 'Strategic Actions') if name in sections)
+            output = '\n'.join(retained + ordered) + '\n'
+            prompt = prompt[:start] + output + prompt[end:]
+            prompt += '\n自由文本输出顺序：分歧点 → 引用核对 → 概率 → 评级（Recommendation） → 理由和行动；先核对证据再给评级。'
         prompt += lesson_reference_instruction(config)
         investment_plan, structured = invoke_decision(
             structured_llm,

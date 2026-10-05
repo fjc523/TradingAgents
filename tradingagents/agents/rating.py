@@ -52,6 +52,8 @@ def rating_definitions(config=None):
         from tradingagents.dataflows.config import get_config
         config = get_config()
     text = RATING_DEFINITIONS if config.get('rating_timing_decoupled', True) else LEGACY_RATING_DEFINITIONS
+    if config.get('price_plan_legs', True):
+        text = text.replace('当前无合格入场点或盈亏比不足仅写入entry_plan/add_plan首句“不适用：等待…”及具体价位，不能作为调整评级理由。', '当前无合格买点只体现在买入腿状态（仅观察）及具体价位，不能作为调整评级理由。研究经理只给方向、目标配置、关键观察位和复评触发，不写entry_plan/add_plan格式。')
     if config.get('allocation_bands', DEFAULT_ALLOCATION_BANDS) is not None:
         text = text.replace('不固定映射比例', '配置按allocation_bands区间')
         text += '\n目标配置须满足allocation_bands区间（见统一配置说明），与入场时机分开。'
@@ -213,6 +215,8 @@ def output_flags(payload, config, *, layer):
     rating=payload.get('recommendation') or payload.get('action') or payload.get('rating')
     rating=getattr(rating,'value',rating)
     flags={}
+    if payload.get('leg_validation_flags'):
+        flags['leg_validation_flags'] = payload['leg_validation_flags']
     if layer=='rm':
         evidence=payload.get('evidence_check')
         cruxes=payload.get('cruxes')

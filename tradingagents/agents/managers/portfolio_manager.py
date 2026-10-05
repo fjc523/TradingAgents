@@ -138,6 +138,10 @@ Write these sections, in this order, starting with the rating on its own line:
         # Read back from text, a rating the thesis quotes could replace it.
         if config.get("rating_probability_fields", True):
             prompt += "\n输出可选prob_outperform_5d、prob_outperform_20d（0–1）与expected_return_20d_range，每项单列；给出评级必须给0–1概率数值，证据薄弱向0.5收缩；只有关键输入缺失且连评级都不能给时才写不可得及原因。"
+        if config.get('price_plan_legs', True):
+            prompt = prompt.replace('输出可选prob_outperform_', '输出prob_outperform_')
+            from tradingagents.agents.price_plan_legs import LEGS_INSTRUCTION
+            prompt = prompt.replace('Buy/Overweight没有合格入场点时保持评级；entry_plan首句写“不适用：等待回踩至 X 或突破 Y 确认”，X/Y均为输入中的具体回踩价和突破价；缺锚点须明确说明缺失，不能编造价位。', LEGS_INSTRUCTION)
         prompt += lesson_reference_instruction(config)
         prompt += social_absence_instruction(config)
         decision = invoke_structured(structured_llm, prompt, "Portfolio Manager")

@@ -15,7 +15,7 @@ from tradingagents.agents.risk_mgmt.neutral_debator import create_neutral_debato
 from tradingagents.agents.schemas import (TraderProposal, PortfolioDecision, load_trader_proposal,
     load_portfolio_decision, render_trader_proposal, render_pm_decision, price_plan_instruction)
 
-OFF = dict(risk_layer_direction_lock=False, rating_timing_decoupled=False, price_plan_alt_target=False, price_plan_evaluation_enabled=False, rating_probability_fields=False, allocation_bands=None, lesson_min_settled_same_ticker=0, cross_ticker_lessons='text', sentiment_min_social_posts=0)
+OFF = dict(price_plan_legs=False, price_plan_target_rule='d1', risk_layer_direction_lock=False, rating_timing_decoupled=False, price_plan_alt_target=False, price_plan_evaluation_enabled=False, rating_probability_fields=False, allocation_bands=None, lesson_min_settled_same_ticker=0, cross_ticker_lessons='text', sentiment_min_social_posts=0)
 BASELINES = {
     'trader': 'becac8b08a195d6def633e5694aa7185138d97de9c7aa72bcc078e2adb8b019b',
     'trader_schema': '7c2cffa549a2f63ff51d75a3a0cbd456996a0720b1812c6ea5be465b16033840',
@@ -79,7 +79,7 @@ def test_risk_only_execution_new_evidence_required(role):
 
 @pytest.mark.parametrize('risk,timing,alt', [(bool(i & 1),bool(i & 2),bool(i & 4)) for i in range(8)])
 def test_private_switch_combinations_and_pm_order(risk, timing, alt):
-    config = dict(risk_layer_direction_lock=risk, rating_timing_decoupled=timing, price_plan_alt_target=alt)
+    config = dict(price_plan_legs=False, price_plan_target_rule='d1', risk_layer_direction_lock=risk, rating_timing_decoupled=timing, price_plan_alt_target=alt)
     for role in ['trader', 'pm']:
         llm = Capture(); node = FACTORIES[role](llm, config)
         FACTORIES[role](Capture(), OFF)
@@ -117,7 +117,7 @@ def test_old_records_compatibility_without_false_declaration():
 def test_price_rule_conditions_and_thresholds_not_relaxed():
     old = price_plan_instruction(OFF)
     assert hashlib.sha256(old.encode()).hexdigest() == 'dd917fcaa60b98b9d0402768ab76ef80186260298304847d2356eaf3311bdaf0'
-    active = price_plan_instruction({})
+    active = price_plan_instruction({'price_plan_legs':False,'price_plan_target_rule':'d1'})
     for phrase in ['最近上方阻力不足1ATR', '60日新高附近且上方无阻力', '区间上沿+2×ATR', '目标方法：ATR替代',
                    '阻力上方0–0.25ATR', '收盘站上阻力', '阻力下方1–1.5ATR', '1–2.5ATR', '盈亏比≥1.5', '不满足仍写不适用']:
         assert phrase in active
@@ -132,7 +132,7 @@ def test_active_rating_definitions_are_direction_only_and_pm_waiting_two_prices(
         assert phrase not in RATING_DEFINITIONS
         assert phrase in LEGACY_RATING_DEFINITIONS
     for role in ['trader','pm']:
-        llm = Capture();FACTORIES[role](llm, {})(fixed_state())
+        llm = Capture();FACTORIES[role](llm, {'price_plan_legs':False,'price_plan_target_rule':'d1'})(fixed_state())
         prompt = '\n'.join(message['content'] for message in llm.prompt) if isinstance(llm.prompt,list) else llm.prompt
         assert RATING_DEFINITIONS in prompt
         assert 'Buy/Overweight没有合格入场点时保持评级' in prompt
@@ -144,6 +144,6 @@ def test_active_rating_definitions_are_direction_only_and_pm_waiting_two_prices(
     from tradingagents.agents.managers.research_manager import create_research_manager
     from tests.test_research_report_evidence import Capture as ResearchCapture
     state=fixed_state();state['investment_debate_state']['history']='辩论'
-    llm=ResearchCapture();create_research_manager(llm, {})(state)
+    llm=ResearchCapture();create_research_manager(llm, {'price_plan_legs':False})(state)
     assert RATING_DEFINITIONS in llm.prompt
     assert '积极建仓或加仓' not in llm.prompt

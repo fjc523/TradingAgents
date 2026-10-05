@@ -20,10 +20,13 @@ from __future__ import annotations
 
 import re
 
+from pydantic.json_schema import SkipJsonSchema
+from tradingagents.agents.price_plan_legs import BuyLeg, ReduceLeg, normalize_legs, render_legs, LEGS_INSTRUCTION
+
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, create_model
+from pydantic import BaseModel, Field, field_validator, model_validator, create_model
 
 # LLMs sometimes write a placeholder string ("None", "N/A", ...) into an optional
 # numeric field instead of omitting it. Coerce those to None so the structured
@@ -273,7 +276,7 @@ _PRICE_PLAN_BASE = (
 )
 
 
-def price_plan_instruction(config=None) -> str:
+def _legacy_price_plan_instruction(config=None) -> str:
     """从当前配置渲染方案规则；不做事后数值校验。"""
     if config is None:
         from tradingagents.dataflows.config import get_config
@@ -306,6 +309,45 @@ def price_plan_instruction(config=None) -> str:
         )
     if config.get('rating_timing_decoupled', True):
         text += 'Buy/Overweight没有合格入场点时保持评级；当前无合格入场点或盈亏比不足只影响entry_plan/add_plan。建仓首句写“不适用：等待回踩至 X 或突破 Y 确认”，X和Y均须为输入可核对的具体价位，不能作为改评级理由。缺任一锚点必须说明缺失并等待可靠行情，不编造X/Y。Underweight或Sell不新建仓。'
+    return text
+
+
+def price_plan_instruction(config=None) -> str:
+    """分别控制状态腿和目标规则，旧联合关闭保持逐字。"""
+    if config is None:
+        from tradingagents.dataflows.config import get_config
+        config = get_config()
+    text = _legacy_price_plan_instruction(config)
+    if config.get('price_plan_target_rule', 'r36') == 'r36':
+        base = _PRICE_PLAN_BASE
+        if config.get('rating_timing_decoupled', True):
+            base = base.replace('方案不能与最终评级相矛盾。', '点位仅表达执行时机，无合格点位不改变方向评级。')
+        target_atr = config.get('price_plan_alt_target_atr', 3.0)
+        buffer = config.get('price_plan_stop_buffer_atr_max', 0.5)
+        target_min = config.get('price_plan_min_target_atr', 1.0)
+        text = base + (
+            'R36：所有距离和盈亏比从区间上沿U（最不利端）量。'
+            '阻力候选是超过U+0.05ATR的P_High、20/60/252日高和10/20/50/200均线；布林等波动包络不作阻力或目标。'
+            'U上方1ATR以内有水平高点，则该区间不合格，改该高点上方突破跟随或仅观察。'
+            f'第一目标取距U≥{target_min:g}ATR的最近具名阻力；不足最小距离的均线跳过并注明。'
+            f'仅U上方没有任何候选（新高无上方阻力）时目标=U+{target_atr:g}ATR，写“目标方法：ATR替代”；有近均线却无合格目标时仅观察。'
+            f'止损取具名支撑减缓冲b（0–{buffer:g}ATR），写锚点名称和缓冲；支撑可用P_Low、U下方P_High/前高、20/60/252日低和U下方均线。'
+            f'止损距离(U−S)/ATR允许{config.get("price_plan_stop_atr_min",1):g}–{config.get("price_plan_stop_atr_max",2.5):g}ATR，推荐{config.get("price_plan_stop_atr_normal", (1.5,2))[0]:g}–{config.get("price_plan_stop_atr_normal", (1.5,2))[1]:g}ATR；超推荐只能写结构原因，不能以盈亏比或目标为理由。'
+            f'盈亏比=(T−U)/(U−S)≥{config.get("price_plan_min_reward_risk",1.5):g}；禁止为凑盈亏比移动止损、区间或目标。'
+            '突破跟随区间R到R+0.25ATR，收盘站上R连续1–2日确认后执行，止损仍按具名支撑减缓冲。'
+            '任何检查不通过均写仅观察和失败原因；ATR不可用或锚点缺失只观察并说明无法校验。'
+            '目标距离>3ATR必须标明并单列统计；有效期仍5交易日；不改变评级或配置档。'
+        )
+        if config.get('rating_timing_decoupled', True) and not config.get('price_plan_legs', True):
+            legacy = _legacy_price_plan_instruction(config)
+            if 'Buy/Overweight没有合格入场点时保持评级；' in legacy:
+                text += 'Buy/Overweight没有合格入场点时保持评级；' + legacy.split('Buy/Overweight没有合格入场点时保持评级；', 1)[1]
+    if config.get('price_plan_legs', True):
+        text = text.replace('建仓面向尚未持仓，加仓面向已有仓位；每项包含价格区间、触发条件、失效条件和具体依据。', '')
+        # 旧状态模板全部替换；目标d1对应段保持原文。
+        text = re.sub(r'Buy/Overweight没有合格入场点时保持评级；当前无合格入场点.*?Underweight或Sell不新建仓。', '', text)
+        text = text.replace('减仓面向已有仓位，说明减配或止损的触发条件；每项首句固定为「区间 X–Y 美元（依据：具体价位名称）」或「不适用：原因」，供首页展示。', '')
+        text += LEGS_INSTRUCTION
     return text
 
 
@@ -401,6 +443,12 @@ class CompatibleTraderProposal(LegacyTraderProposal):
 
 
 def load_trader_proposal(data):
+    if 'buy_legs' in data or 'reduce_legs' in data:
+        if data.get('direction_change') is None:
+            # 关闭方向声明的合法腿记录读取，不补造“否”或新必填字段。
+            payload = {key: value for key, value in data.items() if key != 'direction_change'}
+            return decision_schema(CompatibleTraderProposal, {'price_plan_legs': True}, 'trader').model_validate(payload)
+        return LegTraderProposal.model_validate(data)
     return CompatibleTraderProposal.model_validate(data) if 'direction_change' not in data else TraderProposal.model_validate(data)
 
 
@@ -423,6 +471,8 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
                          ("建仓点位", proposal.entry_plan), ("加仓点位", proposal.add_plan),
                          ("减仓点位", proposal.reduce_plan)):
         parts.extend(["", f"**{label}**: {value or '未提供；等待可靠行情及条件确认'}"])
+        if label == '减仓点位' and (execution := render_legs(proposal)):
+            parts.extend(['', execution.strip()])
     parts.extend(["", f"**目标配置（标准仓位=100%）**: {_allocation_text(proposal.target_allocation_pct)}"])
     if hasattr(proposal, "first_target"):
         parts.extend(["", f"**First Target**: {proposal.first_target if proposal.first_target is not None else 'not provided'}"])
@@ -515,6 +565,12 @@ class CompatiblePortfolioDecision(LegacyPortfolioDecision):
 
 
 def load_portfolio_decision(data):
+    if 'buy_legs' in data or 'reduce_legs' in data:
+        if data.get('direction_change') is None:
+            # 关闭方向声明的合法腿记录读取，不补造“否”或新必填字段。
+            payload = {key: value for key, value in data.items() if key != 'direction_change'}
+            return decision_schema(CompatiblePortfolioDecision, {'price_plan_legs': True}, 'pm').model_validate(payload)
+        return LegPortfolioDecision.model_validate(data)
     return CompatiblePortfolioDecision.model_validate(data) if 'direction_change' not in data else PortfolioDecision.model_validate(data)
 
 
@@ -539,6 +595,8 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
                          ("建仓点位", decision.entry_plan), ("加仓点位", decision.add_plan),
                          ("减仓点位", decision.reduce_plan)):
         parts.extend(["", f"**{label}**: {value or '未提供；等待可靠行情及条件确认'}"])
+        if label == '减仓点位' and (execution := render_legs(decision)):
+            parts.extend(['', execution.strip()])
     parts.extend(["", f"**目标配置（标准仓位=100%）**: {_allocation_text(decision.target_allocation_pct)}"])
     # Named even when absent: a missing line reads as a field nobody asked for,
     # so a reader cannot tell "no target" from "target not reported".
@@ -656,9 +714,22 @@ def _probability_value(value):
 from functools import lru_cache
 
 @lru_cache(maxsize=64)
-def _extended_decision_schema(base, prices, probabilities, layer, timing):
+def _extended_decision_schema(base, prices, probabilities, layer, timing, legs=False):
     """缓存schema类以保持相同开关下工具签名稳定。"""
     fields={};validators={}
+    if legs and layer != 'rm':
+        # 软诊断属于运行期元数据，不进入模型的生成schema。
+        fields['leg_validation_flags']=(SkipJsonSchema[list[str]], Field(default_factory=list))
+        validators['_leg_input']=model_validator(mode='before')(classmethod(lambda cls, value: normalize_legs(value)))
+        if 'direction_change' in base.model_fields:
+            validators['_direction_format']=field_validator('direction_change')(classmethod(lambda cls,value:value))
+        if layer != 'rm':
+            fields['buy_legs']=(list[BuyLeg] | None, Field(default=None,description='最多两条真实买入分支；每条独立状态、触发、止损和目标，不强造价格。'))
+            fields['reduce_legs']=(list[ReduceLeg] | None, Field(default=None,description='超配回落只减超额到目标；风险减配写具名失效位和减后配置。'))
+            for name in ('entry_plan','add_plan','reduce_plan'):
+                fields[name]=(str | None,Field(default=None,description=LEGS_INSTRUCTION))
+            if layer == 'pm':
+                fields['investment_thesis']=(str,Field(description='投资论点≤800字，引用具体证据；可参考历史记录，样本不足时不据此改变方向；说明复评触发，修改点位须理由。'))
     if timing and layer=='pm':
         fields['time_horizon']=(str | None,Field(default=None,description='决策方向周期为未来5–20交易日；点位有效期另依输入，不写3–6个月。'))
     if prices and layer!='rm':
@@ -672,7 +743,7 @@ def _extended_decision_schema(base, prices, probabilities, layer, timing):
         for field in ('prob_outperform_5d','prob_outperform_20d'):
             fields[field]=(float | str | None, Field(default=None, description='对应交易日窗口主口径收益>0的概率0–1；给出评级时必须为0–1数值，证据薄弱向0.5收缩；仅关键输入缺失且不能评级可写不可得及原因。旧未知数据兼容读取，不补值。'))
         fields['expected_return_20d_range']=(str | None,Field(default=None,description='20交易日主口径预期收益区间，例如−2% ~ +5%；证据不足不编造。'))
-        validators['_probabilities']=field_validator('prob_outperform_5d','prob_outperform_20d',mode='before')(classmethod(lambda cls,value:_probability_value(value)))
+        validators['_probabilities']=field_validator('prob_outperform_5d','prob_outperform_20d',mode='before')(classmethod(lambda cls,value:_probability_value(float(value.strip()[:-1])/100 if legs and isinstance(value,str) and value.strip().endswith('%') and _is_percentage_number(value) else value)))
     if not fields:
         return base
     model = create_model(base.__name__+'OptionalFields',__base__=base,__validators__=validators,**fields)
@@ -694,7 +765,7 @@ def _extended_decision_schema(base, prices, probabilities, layer, timing):
 def decision_schema(base, config, layer):
     """每项关闭恢复旧字段；不顺带关闭其他功能。"""
     original=_SCHEMA_BASES.get(base,base)
-    return _extended_decision_schema(original,config.get('price_plan_evaluation_enabled',True),config.get('rating_probability_fields',True),layer,config.get('rating_timing_decoupled',True))
+    return _extended_decision_schema(original,config.get('price_plan_evaluation_enabled',True),config.get('rating_probability_fields',True),layer,config.get('rating_timing_decoupled',True),config.get('price_plan_legs',True))
 
 
 def _probability_lines(model):
@@ -708,6 +779,17 @@ def _probability_lines(model):
 # 公共新schema包含可选字段，关闭配置仍选其原类；旧加载不要求新增字段。
 for _name,_layer in [('ResearchPlan','rm'),('TraderProposal','trader'),('PortfolioDecision','pm')]:
     _base=globals()[_name]
-    _new=decision_schema(_base,{},_layer)
+    _new=decision_schema(_base,{'price_plan_legs':False},_layer)
     _SCHEMA_BASES[_new]=_base
     globals()[_name]=_new
+
+
+def _is_percentage_number(value):
+    try:
+        return bool(value.strip()[:-1]) and __import__('math').isfinite(float(value.strip()[:-1]))
+    except (ValueError, TypeError):
+        return False
+
+
+LegTraderProposal = decision_schema(TraderProposal, {'price_plan_legs': True}, 'trader')
+LegPortfolioDecision = decision_schema(PortfolioDecision, {'price_plan_legs': True}, 'pm')

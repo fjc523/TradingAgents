@@ -25,7 +25,7 @@ def test_actual_generation_order(base,layer):
         assert order[order.index(rating)-3:order.index(rating)]==probability_fields
         for evidence in ('cruxes','evidence_check'):
             if evidence in order:assert order.index(evidence)<order.index(probability_fields[0])
-    assert list(schema.model_fields)==list(schema.model_json_schema()['properties'])
+    assert [name for name in schema.model_fields if name != 'leg_validation_flags']==list(schema.model_json_schema()['properties'])
 
 
 # 修改前d868bdb的JSON全文SHA256，同其他开关逐字比较，不能仅比较字段集合。
@@ -40,7 +40,7 @@ def test_actual_generation_order(base,layer):
     (PortfolioDecision,'pm',True,True,'28190b7f322706f38115b7a5d660721fc216a9b9a1b64632aae877d57236b750'),
 ])
 def test_probability_disabled_exact_baseline(base,layer,prices,timing,digest):
-    schema=decision_schema(base,{'rating_probability_fields':False,'price_plan_evaluation_enabled':prices,'rating_timing_decoupled':timing},layer)
+    schema=decision_schema(base,{'price_plan_legs':False,'rating_probability_fields':False,'price_plan_evaluation_enabled':prices,'rating_timing_decoupled':timing},layer)
     encoded=json.dumps(schema.model_json_schema(),ensure_ascii=False).encode()
     assert hashlib.sha256(encoded).hexdigest()==digest
 

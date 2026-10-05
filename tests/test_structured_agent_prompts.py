@@ -51,7 +51,7 @@ def test_trader_prompt_states_constraint():
 
     captured = {}
     llm = _capturing_llm(captured, TraderProposal(direction_change="否", action=TraderAction.BUY, reasoning="x"))
-    create_trader(llm)({
+    create_trader(llm, {'price_plan_legs': False, 'price_plan_target_rule': 'd1'})({
         "company_of_interest": "NVDA",
         "investment_plan": "**Recommendation**: Buy",
         "market_report": "Current price $189.5; ATR 4.2.",
@@ -72,7 +72,7 @@ def test_research_manager_prompt_states_constraint():
             recommendation=PortfolioRating.BUY, rationale="x", strategic_actions="y"
         ),
     )
-    create_research_manager(llm)({
+    create_research_manager(llm, {'price_plan_legs': False, 'price_plan_target_rule': 'd1'})({
         "company_of_interest": "NVDA",
         "investment_debate_state": {
             "history": "h", "bull_history": "b", "bear_history": "r",
@@ -103,7 +103,7 @@ def test_portfolio_manager_prompt_states_constraint():
         "current_conservative_response": "", "current_neutral_response": "",
         "latest_speaker": "Neutral", "count": 1,
     }
-    create_portfolio_manager(llm)({
+    create_portfolio_manager(llm, {'price_plan_legs': False, 'price_plan_target_rule': 'd1'})({
         "company_of_interest": "NVDA",
         "risk_debate_state": risk,
         "investment_plan": "plan",

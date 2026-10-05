@@ -451,3 +451,10 @@ runner直接启动本机Claude二进制，在临时空目录和清理API/provide
 记录每角色实际model、configured high及effective `NOT_REPORTED`（CLI未提供运行时字段），不保证服务端没有cap。成功和非零退出都保留返回tokens（含缓存）及目录价估算，缺字段标未知，不写零消费；订阅实际支付金额未知。额度/认证/配置失败不重试，超时/限频/传输仅按显式预算重试，默认0。离线错误分类桩不代表发生过真实额度事件；真实A/B须由调用项目显式测试入口隔离执行，不自动启用生产方案。
 
 认证预检失败仅附安全role/stage/model_requests=0供调用项目区分尝试与实际调用，不创建模型用量行。失败控制输出中的actual_api_providers保留原firstParty/bedrock/vertex等安全路由字段，缺失未知，不能用配置订阅代替观察事实。
+
+
+### T37 状态腿、持仓条件与R36（W1/W2）
+
+`price_plan_legs` 默认true，动态 `LegTraderProposal` / `LegPortfolioDecision` 新增可选 `buy_legs` 和 `reduce_legs`，RM不增腿。所有新字段软归一，非数/非法枚举/类型置空并记录 `leg_validation_flags`，倒置区间/超过两腿保留并标记，内部标记不进入模型生成schema。买入状态为可执行、待触发、仅观察，减仓分超配回落与风险减配；加仓同价可以写同建仓，只补目标差额，目标内持仓不得因阻力受阻机械减仓，不连接账户。旧无腿记录不加执行段，新记录在减仓点位后逐腿显示执行条件。方向开关关闭且新腿已保存的记录允许无声明读取，不补造“否”。
+
+`price_plan_target_rule` 默认r36。目标候选高于U+0.05ATR，1ATR内水平高点则该区间不合格；最近≥1ATR具名阻力为目标，完全无候选才U+3ATR，有近均线无合格远目标只观察。止损必须具名支撑减0–0.5ATR缓冲，仍从区间上沿量1–2.5ATR，最低RR1.5，禁止为RR倒推。`price_plan_legs=false` 且 `price_plan_target_rule=d1` 联合恢复旧提示/schema逐字，单独开关只恢复相应片段。新分支方向声明接受“是”加标点/空白及证据，异常保留并软flag；RM引用核对及概率在评级前、PM概率在评级前，62%归一0.62；旧严格声明与概率关闭快照保留。真实模型效果未调用验证（NOT_TESTED），逐腿结算由主项目后续W3实现。

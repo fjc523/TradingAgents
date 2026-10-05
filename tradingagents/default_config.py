@@ -169,6 +169,11 @@ def build_default_config() -> dict:
         "risk_layer_direction_lock": True,
         "rating_timing_decoupled": True,
         "price_plan_alt_target": True,
+        "price_plan_legs": True,
+        "price_plan_target_rule": "r36",
+        "price_plan_alt_target_atr": 3.0,
+        "price_plan_stop_buffer_atr_max": 0.5,
+        "price_plan_min_target_atr": 1.0,
         "debate_mode": "structured",
         # 第二模型及轮换仅显式配置启用，生产默认保持原路径。
         "role_llm_overrides": {},
