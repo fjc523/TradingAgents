@@ -40,6 +40,15 @@ def _value(frame, index, column):
         return None
 
 
+def eps_change(actual, base):
+    """绝对基数避免负分母翻向；近零仅给美元差额。"""
+    actual,base=number(actual),number(base)
+    if actual is None or base is None:return '不可计算'
+    difference=actual-base
+    if abs(base)<0.05:return f'{difference:+.5g}美元（基数过小，百分比不可比）'
+    return f'{difference/abs(base)*100:+.2f}%'
+
+
 def render_expectations(frames, *, queried_at, errors=None):
     """把实际字段渲染成表，历史趋势只是当前快照中的回看值。"""
     lines = [f'### 一致预期（yfinance 当前快照；查询于 {queried_at}）',
@@ -53,17 +62,16 @@ def render_expectations(frames, *, queried_at, errors=None):
         for period in ('0q','+1q'):
             previous=number(_value(frames.get('eps_trend'),period,f'{days}daysAgo'))
             current=number(_value(frames.get('eps_trend'),period,'current'))
-            change=(current-previous)/previous*100 if previous not in (None,0) and current is not None else None
-            cells.append(f'{_cell(previous)}；变化{change:+.2f}%' if change is not None else f'{_cell(previous)}；变化不可计算')
+            cells.append(f'{_cell(previous)}；变化{eps_change(current,previous)}')
         lines.append('|'+'|'.join([f'{days}天前EPS及变化',*cells])+'|')
     for label,column in [('近30天上调数','upLast30days'),('近30天下调数','downLast30days')]:
         lines.append('|'+'|'.join([label,*[_cell(_value(frames.get('eps_revisions'),period,column)) for period in ('0q','+1q')]])+'|')
-    lines += ['', '变化%=(当前EPS−过去EPS)/过去EPS×100，负基数保留符号，零/缺值不计算。', '', '|财报季度|实际EPS|预期EPS|惊喜%（来源值×100）|','|---|---|---|---|']
+    lines += ['', '变化%=(当前EPS−过去EPS)/|过去EPS|×100；基数绝对值<0.05仅报美元差额，缺值不计算。', '', '|财报季度|实际EPS|预期EPS|惊喜%／美元差额（实际−预期，绝对基数）|','|---|---|---|---|']
     history=frames.get('earnings_history')
     if history is not None and not history.empty:
         for index,row in history.sort_index().tail(4).iterrows():
-            surprise=number(row.get('surprisePercent'))
-            lines.append('|'+'|'.join([str(index),_cell(row.get('epsActual')),_cell(row.get('epsEstimate')),f'{surprise*100:+.2f}%' if surprise is not None else '不可得'])+'|')
+            surprise=eps_change(row.get('epsActual'),row.get('epsEstimate'))
+            lines.append('|'+'|'.join([str(index),_cell(row.get('epsActual')),_cell(row.get('epsEstimate')),surprise])+'|')
     else:
         lines.append('|不可得|不可得|不可得|不可得|')
     dates=frames.get('earnings_dates'); next_date=None

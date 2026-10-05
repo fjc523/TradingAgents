@@ -298,7 +298,11 @@ def fetch_reddit_posts(
     """
     from tradingagents.dataflows.social_result import SocialResult
     def finish(text, *, available=False, count=0):
-        return SocialResult(text, available=available, effective_posts=count) if structured_result else text
+        if not structured_result:return text
+        value=SocialResult(text, available=available, effective_posts=count)
+        value.source_outcome='success' if available else 'failed'
+        value.source_reason='正常（0 条）' if available and count==0 else None if available else text
+        return value
 
     # Crypto reaches us as a Yahoo pair (BTC-USD); search Reddit for the base
     # ("BTC") so the query actually matches discussion instead of near-nothing.

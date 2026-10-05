@@ -83,7 +83,11 @@ def create_sentiment_analyst(llm, config=None):
         reddit_block = observed_call("fetch_reddit", "Reddit", fetch_reddit_posts, ticker, observation_symbol=ticker, start_date=start_date, end_date=end_date, screen=screen, **reddit_kwargs)
         if minimum > 0 and (not getattr(stocktwits_block, 'available', False) or getattr(stocktwits_block, 'effective_posts', 0) == 0) and getattr(reddit_block, 'effective_posts', 0) < minimum:
             stock_reason = 'StockTwits 停用' if not config.get('stocktwits_enabled', True) else 'StockTwits 不可用'
-            reason = f"{stock_reason}；Reddit 提及本标的的有效帖 {getattr(reddit_block, 'effective_posts', 0)} 条（门槛 {minimum} 条）"
+            if not getattr(reddit_block, 'available', False):
+                reddit_reason = getattr(reddit_block, 'reason', None) or getattr(reddit_block, 'source_reason', None) or str(reddit_block)
+                reason = f"{stock_reason}；Reddit 获取失败（{reddit_reason}），非无讨论"
+            else:
+                reason = f"{stock_reason}；Reddit 正常（{getattr(reddit_block, 'effective_posts', 0)} 条）；提及本标的的有效帖不足门槛 {minimum} 条"
             report_text = '**Overall Sentiment:** 未评估（社交数据不足）\n' + reason
             report_vendor('sentiment_assessment', 'social', 'skipped', error=reason, symbol=ticker)
             return {"messages": [AIMessage(content=report_text)], "sentiment_report": report_text}

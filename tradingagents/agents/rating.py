@@ -210,6 +210,11 @@ def allocation_instruction(config=None):
         '配置区间（单标的标准仓位%）：'+'；'.join(rows)+'。证据越强取远离Hold端，财报等风险取接近Hold端；若风险需跨档，应调整评级而非越界。目标为计划完成后量，与等待入场时机分开；没有依据可留空。')
 
 
+def chinese_length(text):
+    """中文/标点各一；连续数字（含小数）和拉丁词元各一，空白不计。"""
+    return len(re.findall(r'\d+(?:\.\d+)?|[A-Za-z]+|[^\s]',text))
+
+
 def output_flags(payload, config, *, layer):
     """标记矛盾而不改评级/概率/配置；缺字段不补默认。"""
     rating=payload.get('recommendation') or payload.get('action') or payload.get('rating')
@@ -220,8 +225,11 @@ def output_flags(payload, config, *, layer):
     if layer=='rm':
         evidence=payload.get('evidence_check')
         cruxes=payload.get('cruxes')
-        if isinstance(evidence,str) and len(evidence)>200:
-            flags['evidence_check_overlength']=True
+        if isinstance(evidence,str):
+            flags['evidence_check_raw_length']=len(evidence)
+            flags['evidence_check_count']=chinese_length(evidence)
+            if flags['evidence_check_count']>200:
+                flags['evidence_check_overlength']=True
         if isinstance(cruxes,list) and not 3<=len(cruxes)<=5:
             flags['cruxes_count']=len(cruxes)
     if config.get('rating_probability_fields',True) and layer in ('rm','pm'):
