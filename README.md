@@ -446,9 +446,9 @@ ETF与指数代理使用etf资产类型；个股使用stock。注入上下文末
 
 `role_llm_overrides`默认空、`role_llm_scheme`默认空、`legacy_speaker_rotation`默认false，不改变原quick/deep提示、schema和模型路径。覆盖仅允许bull、bear、research_manager、trader、aggressive、neutral、conservative、portfolio_manager，四分析师及未知角色配置立即报错。Claude仅接受`claude_exec / claude-opus-5-5 / high`；不允许全局Claude分析师provider。方案A按trade_date日期奇偶在bull/aggressive与bear/conservative间互换，方案B覆盖研究经理、交易员、组合经理；显式legacy轮换奇数日bear先发，structured仍保持双方并行opening/rebuttal。
 
-runner直接启动本机Claude二进制，在临时空目录和清理API/provider凭据的环境先只读`auth status`。只有已登录claude.ai、firstParty及支持的订阅类型才发送prompt；Console/API、未登录、坏输出或认证超时不产生模型请求，也不修改登录或全局设置。模型调用关闭用户/项目settings、工具、MCP、自定义指令与持久会话；返回明确用户/项目自定义插件路径时拒绝，内置schema能力不作外部污染。订阅路径与实际model再次从控制输出校验，结构化结果本地验证，无模型/API回落。
+runner直接启动本机Claude二进制，在临时空目录和清理API/provider凭据的环境先只读`auth status`。只有已登录claude.ai、firstParty及支持的订阅类型才发送prompt；Console/API、未登录、坏输出或认证超时不产生模型请求，也不修改登录或全局设置。模型调用关闭用户/项目settings、工具、MCP、自定义指令与持久会话；返回明确用户/项目自定义插件路径时拒绝，内置schema能力不作外部污染。订阅路径与实际model再次从控制输出校验，结构化结果本地验证，禁止API计费回落；显式角色包装允许按分类回退原默认Codex订阅模型。
 
-记录每角色实际model、configured high及effective `NOT_REPORTED`（CLI未提供运行时字段），不保证服务端没有cap。成功和非零退出都保留返回tokens（含缓存）及目录价估算，缺字段标未知，不写零消费；订阅实际支付金额未知。额度/认证/配置失败不重试，超时/限频/传输仅按显式预算重试，默认0。离线错误分类桩不代表发生过真实额度事件；真实A/B须由调用项目显式测试入口隔离执行，不自动启用生产方案。
+记录每角色实际model、configured high及effective `NOT_REPORTED`（CLI未提供运行时字段），不保证服务端没有cap。成功和非零退出都保留返回tokens（含缓存）及目录价估算，缺字段标未知，不写零消费；订阅实际支付金额未知。额度/认证/配置失败不重试，超时/限频/传输按预算重试，默认1次、30秒退避，默认timeout300秒。离线错误分类桩不代表发生过真实额度事件；真实A/B须由调用项目显式测试入口隔离执行，不自动启用生产方案。
 
 认证预检失败仅附安全role/stage/model_requests=0供调用项目区分尝试与实际调用，不创建模型用量行。失败控制输出中的actual_api_providers保留原firstParty/bedrock/vertex等安全路由字段，缺失未知，不能用配置订阅代替观察事实。
 
@@ -458,3 +458,5 @@ runner直接启动本机Claude二进制，在临时空目录和清理API/provide
 `price_plan_legs` 默认true，动态 `LegTraderProposal` / `LegPortfolioDecision` 新增可选 `buy_legs` 和 `reduce_legs`，RM不增腿。所有新字段软归一，非数/非法枚举/类型置空并记录 `leg_validation_flags`，倒置区间/超过两腿保留并标记，内部标记不进入模型生成schema。买入状态为可执行、待触发、仅观察，减仓分超配回落与风险减配；加仓同价可以写同建仓，只补目标差额，目标内持仓不得因阻力受阻机械减仓，不连接账户。旧无腿记录不加执行段，新记录在减仓点位后逐腿显示执行条件。方向开关关闭且新腿已保存的记录允许无声明读取，不补造“否”。
 
 `price_plan_target_rule` 默认r36。目标候选高于U+0.05ATR，1ATR内水平高点则该区间不合格；最近≥1ATR具名阻力为目标，完全无候选才U+3ATR，有近均线无合格远目标只观察。止损必须具名支撑减0–0.5ATR缓冲，仍从区间上沿量1–2.5ATR，最低RR1.5，禁止为RR倒推。`price_plan_legs=false` 且 `price_plan_target_rule=d1` 联合恢复旧提示/schema逐字，单独开关只恢复相应片段。新分支方向声明接受“是”加标点/空白及证据，异常保留并软flag；RM引用核对及概率在评级前、PM概率在评级前，62%归一0.62；旧严格声明与概率关闭快照保留。真实模型效果未调用验证（NOT_TESTED），逐腿结算由主项目后续W3实现。
+
+T37角色回退默认 `role_llm_fallback=true`，仅在有角色覆盖的Claude角色启用。额度/配置错误立即开启批次熔断，暂态重试耗尽第二次开启；后续角色不调用Claude认证/模型。`_role_llm_breaker` 由调用项目每批新建并共享，线程安全计数及日志追加；结构化与自由文本共用包装，人工中止/非订阅分类错误照常抛出。回退按该角色原quick/deep模型与effort，复制默认runner仅绑定角色日志，不污染分析师实例，禁止Anthropic或其他APIprovider。空scheme/overrides保持原实例及空metadata。T23调用项目强制fallback=false/retries=0/timeout600/并发1。真实回退质量、耗时/额度及自然样本NOT_TESTED。

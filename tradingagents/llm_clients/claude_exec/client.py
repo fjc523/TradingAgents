@@ -14,8 +14,8 @@ class ClaudeExecClient(BaseLLMClient):
     provider='claude_exec'
     def get_llm(self):
         runner=ClaudeExecRunner(model=self.model,reasoning_effort=self.kwargs.get('reasoning_effort','high'),
-            binary=self.kwargs.get('claude_binary','~/.local/bin/claude'),timeout=self.kwargs.get('claude_timeout',600),
-            retries=self.kwargs.get('claude_retries',0),max_concurrency=self.kwargs.get('claude_max_concurrency',4),
+            binary=self.kwargs.get('claude_binary','~/.local/bin/claude'),timeout=self.kwargs.get('claude_timeout',300),
+            retries=self.kwargs.get('claude_retries',1),max_concurrency=self.kwargs.get('claude_max_concurrency',4),
             usage_log_path=self.kwargs.get('codex_usage_log_path'))
         runner.role=self.kwargs.get('role')
         return ClaudeExecChatModel(model_name=self.model,reasoning_effort=runner.reasoning_effort,runner=runner)

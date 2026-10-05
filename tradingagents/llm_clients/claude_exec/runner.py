@@ -14,7 +14,7 @@ from tradingagents.llm_clients.errors import LLMNonRecoverableError
 
 
 class ClaudeExecError(LLMNonRecoverableError):
-    """不可自动切换模型或API计费的调用错误。"""
+    """订阅调用错误；分类回退由显式角色包装控制，禁止API计费。"""
 
 
 class ClaudeQuotaError(ClaudeExecError):
@@ -133,7 +133,7 @@ def parse_output(stdout, schema, model):
 _LOG_LOCK=threading.Lock()
 class ClaudeExecRunner:
     def __init__(self, *, model='claude-opus-5-5', reasoning_effort='high', binary='~/.local/bin/claude',
-                 timeout=600,retries=0,max_concurrency=4,usage_log_path=None,popen=None,sleeper=time.sleep,auth_run=None):
+                 timeout=300,retries=1,max_concurrency=4,usage_log_path=None,popen=None,sleeper=time.sleep,auth_run=None):
         if model!='claude-opus-5-5' or reasoning_effort!='high':raise ClaudeConfigError('仅允许claude-opus-5-5 high既定选型')
         self.model=model;self.reasoning_effort=reasoning_effort;self.binary=binary
         self.timeout=float(timeout);self.retries=int(retries);self.max_concurrency=int(max_concurrency)
@@ -190,5 +190,7 @@ class ClaudeExecRunner:
                     if category=='quota':raise ClaudeQuotaError('Claude订阅额度不足')
                     if category=='configuration':raise ClaudeConfigError('Claude配置/认证/模型不可用')
                 if attempt<self.retries:self._sleep(min(30*(attempt+1),120))
-            raise ClaudeTransientError('Claude '+str(category)+' 重试耗尽')
+            error=ClaudeTransientError('Claude '+str(category)+' 重试耗尽')
+            error.category=category
+            raise error
         finally:common._release_slot()

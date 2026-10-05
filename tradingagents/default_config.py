@@ -178,6 +178,9 @@ def build_default_config() -> dict:
         # 第二模型及轮换仅显式配置启用，生产默认保持原路径。
         "role_llm_overrides": {},
         "role_llm_scheme": None,
+        "role_llm_fallback": True,
+        "claude_timeout": 300,
+        "claude_retries": 1,
         "legacy_speaker_rotation": False,
         "research_manager_reads_reports": True,
         "max_debate_rounds": 1,

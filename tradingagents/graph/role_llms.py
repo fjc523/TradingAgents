@@ -1,6 +1,6 @@
 """显式角色模型与日期方案；无配置时完全复用原quick/deep实例。"""
 from datetime import date
-from copy import deepcopy
+from copy import deepcopy, copy
 from tradingagents.llm_clients import create_llm_client,build_llm_kwargs
 
 ROLES=('bull','bear','research_manager','trader','aggressive','neutral','conservative','portfolio_manager')
@@ -41,6 +41,8 @@ def legacy_first(config):
 def build_role_llms(config, quick, deep, callbacks=None):
     overrides=resolve_overrides(config)
     if not overrides:return {},{}
+    from .role_fallback import RoleBatchBreaker, RoleFallbackLLM
+    breaker=config.get('_role_llm_breaker') or RoleBatchBreaker()
     models={};metadata={}
     for role in ROLES:
         tier='deep' if role in DEEP_ROLES else 'quick'
@@ -56,4 +58,16 @@ def build_role_llms(config, quick, deep, callbacks=None):
         client=create_llm_client(resolved['provider'],resolved['model'],config.get('backend_url'),**kwargs)
         models[role]=client.get_llm();metadata[role]={**resolved,'configured_effort':resolved['effort'],
             'effective_effort':'NOT_REPORTED' if resolved['provider']=='claude_exec' else '配置档位；实际用量日志分列'}
+        if resolved['provider']=='claude_exec' and config.get('role_llm_fallback',True):
+            if config['llm_provider']!='codex_exec':
+                raise ValueError('角色回退仅允许Codex订阅默认模型，禁止API计费')
+            target={'provider':'codex_exec','model':config[f'{tier}_think_llm'],
+                    'effort':config.get(f'codex_{tier}_reasoning_effort') or config.get('codex_reasoning_effort') or 'high'}
+            fallback=deep if tier=='deep' else quick
+            if hasattr(fallback,'runner') and hasattr(fallback,'model_copy'):
+                runner=copy(fallback.runner)
+                runner.role=role
+                fallback=fallback.model_copy(update={'runner':runner})
+            models[role]=RoleFallbackLLM(models[role],fallback,
+                role=role,breaker=breaker,target=target,usage_log_path=config.get('codex_usage_log_path'))
     return models,metadata

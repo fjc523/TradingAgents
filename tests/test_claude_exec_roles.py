@@ -68,7 +68,7 @@ def test_schema_unknown_effort_and_failure_categories():
     assert classify('quota exceeded')=='quota' and classify('429 rate limit')=='rate_limit' and classify('',True)=='timeout'
     with pytest.raises(ClaudeQuotaError):ClaudeExecRunner(popen=lambda *a,**kw:Process(error='quota exceeded')).run('x',SCHEMA)
     with pytest.raises(ClaudeConfigError):ClaudeExecRunner(popen=lambda *a,**kw:Process(error='unknown model')).run('x',SCHEMA)
-    with pytest.raises(ClaudeTransientError):ClaudeExecRunner(popen=lambda *a,**kw:Process(timeout=True)).run('x',SCHEMA)
+    with pytest.raises(ClaudeTransientError):ClaudeExecRunner(popen=lambda *a,**kw:Process(timeout=True),retries=0).run('x',SCHEMA)
 
 
 def test_client_langchain_structured_uses_existing_validation():
