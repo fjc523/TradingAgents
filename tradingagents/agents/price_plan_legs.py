@@ -56,7 +56,12 @@ def soft_direction(value):
     if stripped.startswith('是'):
         tail = stripped[1:]
         if tail and (tail[0].isspace() or unicodedata.category(tail[0]).startswith('P')):
-            evidence = tail.lstrip(' \t\r\n:：,，。.;；—–-（(“”"')
+            evidence = tail.lstrip(' \t\r\n:：,，。.;；—–-')
+            # 仅去除完整成对外括号；不删除证据内部或不成对标点。
+            for left, right in (('（', '）'), ('(', ')')):
+                if evidence.startswith(left) and evidence.endswith(right):
+                    evidence = evidence[1:-1].strip()
+                    break
             if evidence.strip('）) \t\r\n'):
                 return '是：' + evidence.strip()
     return value
@@ -143,19 +148,30 @@ LEGS_INSTRUCTION = (
 )
 
 
+def legs_instruction(config=None):
+    """长规则只进入实际提示词，容差使用本次配置且0明确关闭。"""
+    tolerance = (config or {}).get('allocation_tolerance_pct', 10)
+    note = (f'与目标相差<{tolerance:g}个百分点视为达标、不动'
+            if tolerance > 0 else '容差关闭，按目标精确比较')
+    return LEGS_INSTRUCTION.replace('与目标相差小于配置容差视为达标、不动', note) + (
+        'stop_anchor、target_anchor必须使用输入锚点表的键名（例如P_Low、close_50_sma、20d_High）；'
+        '未知锚点不得猜测对应键名，ATR替代明确写目标方法。'
+    )
+
+
 def render_legs(model):
     """旧记录没有非空腿时不新增执行段。"""
     buy = getattr(model, 'buy_legs', None) or []
     reduce = getattr(model, 'reduce_legs', None) or []
     if not buy and not reduce:
         return ''
-    def val(value):
-        return f'{value:g}' if isinstance(value, (int, float)) else str(value or '未提供')
+    def val(value, *, price=True):
+        return (f'{value:.2f}' if price else f'{value:g}') if isinstance(value, (int, float)) else str(value or '未提供')
     lines = ['', '', '**执行条件**']
     for leg in buy:
         zone = val(leg.zone_low) + '–' + val(leg.zone_high)
-        trigger = (f'收盘站上{val(leg.trigger_price)}（{val(leg.confirm_days)}日）后 ' if leg.trigger_rule == '收盘站上' else '触及区间 ')
+        trigger = (f'收盘站上{val(leg.trigger_price)}（{val(leg.confirm_days, price=False)}日）后 ' if leg.trigger_rule == '收盘站上' else '触及区间 ')
         lines.append(f'- 买入·{val(leg.kind)}｜{val(leg.status)}｜{trigger}{zone}｜止损{val(leg.stop_loss)}（{val(leg.stop_anchor)}）｜目标{val(leg.first_target)}（{val(leg.target_method)}）｜{leg.reason or ""}')
     for leg in reduce:
-        lines.append(f'- {val(leg.kind)}｜{val(leg.trigger_rule)}{val(leg.trigger_price)}｜{val(leg.zone_low)}–{val(leg.zone_high)}｜减至{val(leg.post_allocation_pct)}%｜{leg.reason or ""}')
+        lines.append(f'- {val(leg.kind)}｜{val(leg.trigger_rule)}{val(leg.trigger_price)}｜{val(leg.zone_low)}–{val(leg.zone_high)}｜减至{val(leg.post_allocation_pct, price=False)}%｜{leg.reason or ""}')
     return '\n'.join(lines)

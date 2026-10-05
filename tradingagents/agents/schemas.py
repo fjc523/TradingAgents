@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 
 from pydantic.json_schema import SkipJsonSchema
-from tradingagents.agents.price_plan_legs import BuyLeg, ReduceLeg, normalize_legs, render_legs, LEGS_INSTRUCTION
+from tradingagents.agents.price_plan_legs import BuyLeg, ReduceLeg, normalize_legs, render_legs, legs_instruction
 
 from enum import StrEnum
 from typing import Literal
@@ -347,7 +347,7 @@ def price_plan_instruction(config=None) -> str:
         # 旧状态模板全部替换；目标d1对应段保持原文。
         text = re.sub(r'Buy/Overweight没有合格入场点时保持评级；当前无合格入场点.*?Underweight或Sell不新建仓。', '', text)
         text = text.replace('减仓面向已有仓位，说明减配或止损的触发条件；每项首句固定为「区间 X–Y 美元（依据：具体价位名称）」或「不适用：原因」，供首页展示。', '')
-        text += LEGS_INSTRUCTION
+        text += legs_instruction(config)
     return text
 
 
@@ -727,7 +727,7 @@ def _extended_decision_schema(base, prices, probabilities, layer, timing, legs=F
             fields['buy_legs']=(list[BuyLeg] | None, Field(default=None,description='最多两条真实买入分支；每条独立状态、触发、止损和目标，不强造价格。'))
             fields['reduce_legs']=(list[ReduceLeg] | None, Field(default=None,description='超配回落只减超额到目标；风险减配写具名失效位和减后配置。'))
             for name in ('entry_plan','add_plan','reduce_plan'):
-                fields[name]=(str | None,Field(default=None,description=LEGS_INSTRUCTION))
+                fields[name]=(str | None,Field(default=None,description='遵循提示词中的执行腿规则与首句格式；与对应buy_legs/reduce_legs一致，每段≤200字。'))
             if layer == 'pm':
                 fields['investment_thesis']=(str,Field(description='投资论点≤800字，引用具体证据；可参考历史记录，样本不足时不据此改变方向；说明复评触发，修改点位须理由。'))
     if timing and layer=='pm':

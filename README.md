@@ -462,3 +462,6 @@ runner直接启动本机Claude二进制，在临时空目录和清理API/provide
 T37角色回退默认 `role_llm_fallback=true`，仅在有角色覆盖的Claude角色启用。额度/配置错误立即开启批次熔断，暂态重试耗尽第二次开启；后续角色不调用Claude认证/模型。`_role_llm_breaker` 由调用项目每批新建并共享，线程安全计数及日志追加；结构化与自由文本共用包装，人工中止/非订阅分类错误照常抛出。回退按该角色原quick/deep模型与effort，复制默认runner仅绑定角色日志，不污染分析师实例，禁止Anthropic或其他APIprovider。空scheme/overrides保持原实例及空metadata。T23调用项目强制fallback=false/retries=0/timeout600/并发1。真实回退质量、耗时/额度及自然样本NOT_TESTED。
 
 T37 W7/W8：Reddit结构取数失败不称0帖/无讨论，正常0帖以success来源状态和「正常（0条）」说明，minimum社交门槛继续在模型前跳过。EPS变化与惊喜由实际/基数原值重算并除abs(base)，abs(base)<0.05仅报美元差额和百分比不可比，不用来源极大surprisePercent覆盖近零规则。RM引用核对中文计字保留200门槛：汉字/标点各1，连续数字（含小数）/拉丁词元各1，空白不计；原始len与计字数同时记录，超长只标记不截断。提示/schema生成文字不受计字算法改动，旧联合开关快照保留。
+
+
+T38返工：执行腿提示的长持仓/首句规则只保留一份，三段点位schema用短引用；Trader/PM实际提示包含本次`allocation_tolerance_pct`数值，严格小于N个百分点才达标，0关闭。stop_anchor/target_anchor使用输入锚点表的精确键名，未知不猜。新腿金额展示两位小数，确认日/配置百分比和计算值不改；“是（证据）”/“是(证据)”仅去完整成对外括号，内部和不成对括号保留。联合关闭price_plan_legs与r36（target_rule=d1）的旧提示/schema逐字不变；不调用真实模型，不更改生产A/B或双跑。
