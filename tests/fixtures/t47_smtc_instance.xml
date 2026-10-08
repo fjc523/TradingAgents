@@ -1,0 +1,401 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ns0:xbrl xmlns:ns0="http://www.xbrl.org/2003/instance" xmlns:ns1="http://xbrl.org/2006/xbrldi" xmlns:ns2="http://fasb.org/us-gaap/2025"><ns0:context id="c-1">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-01-26</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-3">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-04-27</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-4">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-04-28</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-5">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-01-27</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-14">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:instant>2026-07-26</ns0:instant>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-15">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:instant>2026-01-25</ns0:instant>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-284">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:SignalIntegrityProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-04-27</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-285">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:AdvancedProtectionAndSensingProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-04-27</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-286">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:SemiconductorProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-04-27</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-287">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:IoTSystemsAndConnectivityMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-04-27</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-288">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:MaterialReconcilingItemsMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-04-27</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-289">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:SignalIntegrityProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-01-26</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-290">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:AdvancedProtectionAndSensingProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-01-26</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-291">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:SemiconductorProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-01-26</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-292">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:IoTSystemsAndConnectivityMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-01-26</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-293">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:MaterialReconcilingItemsMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2026-01-26</ns0:startDate>
+            <ns0:endDate>2026-07-26</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-294">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:SignalIntegrityProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-04-28</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-295">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:AdvancedProtectionAndSensingProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-04-28</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-296">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:SemiconductorProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-04-28</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-297">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:IoTSystemsAndConnectivityMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-04-28</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-298">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:MaterialReconcilingItemsMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-04-28</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-299">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:SignalIntegrityProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-01-27</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-300">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:AdvancedProtectionAndSensingProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-01-27</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-301">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:SemiconductorProductsGroupMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-01-27</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-302">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</ns1:explicitMember>
+                <ns1:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">smtc:IoTSystemsAndConnectivityMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-01-27</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:context id="c-303">
+        <ns0:entity>
+            <ns0:identifier scheme="http://www.sec.gov/CIK">0000088941</ns0:identifier>
+            <ns0:segment>
+                <ns1:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:MaterialReconcilingItemsMember</ns1:explicitMember>
+            </ns0:segment>
+        </ns0:entity>
+        <ns0:period>
+            <ns0:startDate>2025-01-27</ns0:startDate>
+            <ns0:endDate>2025-07-27</ns0:endDate>
+        </ns0:period>
+    </ns0:context>
+    <ns0:unit id="usd">
+        <ns0:measure>iso4217:USD</ns0:measure>
+    </ns0:unit>
+    <ns0:unit id="usdPerShare">
+        <ns0:divide>
+            <ns0:unitNumerator>
+                <ns0:measure>iso4217:USD</ns0:measure>
+            </ns0:unitNumerator>
+            <ns0:unitDenominator>
+                <ns0:measure>shares</ns0:measure>
+            </ns0:unitDenominator>
+        </ns0:divide>
+    </ns0:unit>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-3" decimals="-3" id="f-30" unitRef="usd">341871000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-4" decimals="-3" id="f-31" unitRef="usd">257589000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-1" decimals="-3" id="f-32" unitRef="usd">632889000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-5" decimals="-3" id="f-33" unitRef="usd">508649000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:GrossProfit contextRef="c-3" decimals="-3" id="f-38" unitRef="usd">183764000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-4" decimals="-3" id="f-39" unitRef="usd">134105000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-1" decimals="-3" id="f-40" unitRef="usd">335228000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-5" decimals="-3" id="f-41" unitRef="usd">265394000</ns2:GrossProfit>
+    <ns2:OperatingIncomeLoss contextRef="c-3" decimals="-3" id="f-66" unitRef="usd">55772000</ns2:OperatingIncomeLoss>
+    <ns2:OperatingIncomeLoss contextRef="c-4" decimals="-3" id="f-67" unitRef="usd">-16192000</ns2:OperatingIncomeLoss>
+    <ns2:OperatingIncomeLoss contextRef="c-1" decimals="-3" id="f-68" unitRef="usd">81563000</ns2:OperatingIncomeLoss>
+    <ns2:OperatingIncomeLoss contextRef="c-5" decimals="-3" id="f-69" unitRef="usd">19775000</ns2:OperatingIncomeLoss>
+    <ns2:IncomeTaxExpenseBenefit contextRef="c-3" decimals="-3" id="f-86" unitRef="usd">-101361000</ns2:IncomeTaxExpenseBenefit>
+    <ns2:IncomeTaxExpenseBenefit contextRef="c-4" decimals="-3" id="f-87" unitRef="usd">4793000</ns2:IncomeTaxExpenseBenefit>
+    <ns2:IncomeTaxExpenseBenefit contextRef="c-1" decimals="-3" id="f-88" unitRef="usd">-101249000</ns2:IncomeTaxExpenseBenefit>
+    <ns2:IncomeTaxExpenseBenefit contextRef="c-5" decimals="-3" id="f-89" unitRef="usd">13446000</ns2:IncomeTaxExpenseBenefit>
+    <ns2:EarningsPerShareDiluted contextRef="c-3" decimals="2" id="f-106" unitRef="usdPerShare">1.59</ns2:EarningsPerShareDiluted>
+    <ns2:EarningsPerShareDiluted contextRef="c-4" decimals="2" id="f-107" unitRef="usdPerShare">-0.31</ns2:EarningsPerShareDiluted>
+    <ns2:EarningsPerShareDiluted contextRef="c-1" decimals="2" id="f-108" unitRef="usdPerShare">1.88</ns2:EarningsPerShareDiluted>
+    <ns2:EarningsPerShareDiluted contextRef="c-5" decimals="2" id="f-109" unitRef="usdPerShare">-0.09</ns2:EarningsPerShareDiluted>
+    <ns2:Assets contextRef="c-14" decimals="-3" id="f-186" unitRef="usd">1647041000</ns2:Assets>
+    <ns2:Assets contextRef="c-15" decimals="-3" id="f-187" unitRef="usd">1410337000</ns2:Assets>
+    <ns2:NetCashProvidedByUsedInOperatingActivities contextRef="c-1" decimals="-3" id="f-375" unitRef="usd">105071000</ns2:NetCashProvidedByUsedInOperatingActivities>
+    <ns2:NetCashProvidedByUsedInOperatingActivities contextRef="c-5" decimals="-3" id="f-376" unitRef="usd">72219000</ns2:NetCashProvidedByUsedInOperatingActivities>
+    <ns2:PaymentsToAcquirePropertyPlantAndEquipment contextRef="c-1" decimals="-3" id="f-379" unitRef="usd">15663000</ns2:PaymentsToAcquirePropertyPlantAndEquipment>
+    <ns2:PaymentsToAcquirePropertyPlantAndEquipment contextRef="c-5" decimals="-3" id="f-380" unitRef="usd">4534000</ns2:PaymentsToAcquirePropertyPlantAndEquipment>
+    <ns2:NetIncomeLoss contextRef="c-3" decimals="-3" id="f-448" unitRef="usd">160121000</ns2:NetIncomeLoss>
+    <ns2:NetIncomeLoss contextRef="c-4" decimals="-3" id="f-449" unitRef="usd">-27064000</ns2:NetIncomeLoss>
+    <ns2:NetIncomeLoss contextRef="c-1" decimals="-3" id="f-450" unitRef="usd">186684000</ns2:NetIncomeLoss>
+    <ns2:NetIncomeLoss contextRef="c-5" decimals="-3" id="f-451" unitRef="usd">-7719000</ns2:NetIncomeLoss>
+    <ns2:EarningsPerShareDiluted contextRef="c-3" decimals="2" id="f-480" unitRef="usdPerShare">1.59</ns2:EarningsPerShareDiluted>
+    <ns2:EarningsPerShareDiluted contextRef="c-4" decimals="2" id="f-481" unitRef="usdPerShare">-0.31</ns2:EarningsPerShareDiluted>
+    <ns2:EarningsPerShareDiluted contextRef="c-1" decimals="2" id="f-482" unitRef="usdPerShare">1.88</ns2:EarningsPerShareDiluted>
+    <ns2:EarningsPerShareDiluted contextRef="c-5" decimals="2" id="f-483" unitRef="usdPerShare">-0.09</ns2:EarningsPerShareDiluted>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-284" decimals="-3" id="f-1119" unitRef="usd">126173000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-285" decimals="-3" id="f-1120" unitRef="usd">117352000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-286" decimals="-3" id="f-1121" unitRef="usd">243525000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-287" decimals="-3" id="f-1122" unitRef="usd">98346000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-3" decimals="-3" id="f-1123" unitRef="usd">341871000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:GrossProfit contextRef="c-284" decimals="-3" id="f-1130" unitRef="usd">82411000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-285" decimals="-3" id="f-1131" unitRef="usd">70539000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-286" decimals="-3" id="f-1132" unitRef="usd">152950000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-287" decimals="-3" id="f-1133" unitRef="usd">33438000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-288" decimals="-3" id="f-1134" unitRef="usd">-2624000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-3" decimals="-3" id="f-1135" unitRef="usd">183764000</ns2:GrossProfit>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-289" decimals="-3" id="f-1141" unitRef="usd">228176000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-290" decimals="-3" id="f-1142" unitRef="usd">218107000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-291" decimals="-3" id="f-1143" unitRef="usd">446283000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-292" decimals="-3" id="f-1144" unitRef="usd">186606000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-1" decimals="-3" id="f-1145" unitRef="usd">632889000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:GrossProfit contextRef="c-289" decimals="-3" id="f-1152" unitRef="usd">146404000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-290" decimals="-3" id="f-1153" unitRef="usd">129694000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-291" decimals="-3" id="f-1154" unitRef="usd">276098000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-292" decimals="-3" id="f-1155" unitRef="usd">65004000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-293" decimals="-3" id="f-1156" unitRef="usd">-5874000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-1" decimals="-3" id="f-1157" unitRef="usd">335228000</ns2:GrossProfit>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-294" decimals="-3" id="f-1163" unitRef="usd">76758000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-295" decimals="-3" id="f-1164" unitRef="usd">92042000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-296" decimals="-3" id="f-1165" unitRef="usd">168800000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-297" decimals="-3" id="f-1166" unitRef="usd">88789000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-4" decimals="-3" id="f-1167" unitRef="usd">257589000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:GrossProfit contextRef="c-294" decimals="-3" id="f-1174" unitRef="usd">47859000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-295" decimals="-3" id="f-1175" unitRef="usd">54560000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-296" decimals="-3" id="f-1176" unitRef="usd">102419000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-297" decimals="-3" id="f-1177" unitRef="usd">35054000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-298" decimals="-3" id="f-1178" unitRef="usd">-3368000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-4" decimals="-3" id="f-1179" unitRef="usd">134105000</ns2:GrossProfit>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-299" decimals="-3" id="f-1185" unitRef="usd">150279000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-300" decimals="-3" id="f-1186" unitRef="usd">182665000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-301" decimals="-3" id="f-1187" unitRef="usd">332944000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-302" decimals="-3" id="f-1188" unitRef="usd">175705000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="c-5" decimals="-3" id="f-1189" unitRef="usd">508649000</ns2:RevenueFromContractWithCustomerExcludingAssessedTax>
+    <ns2:GrossProfit contextRef="c-299" decimals="-3" id="f-1196" unitRef="usd">96023000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-300" decimals="-3" id="f-1197" unitRef="usd">111005000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-301" decimals="-3" id="f-1198" unitRef="usd">207028000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-302" decimals="-3" id="f-1199" unitRef="usd">64977000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-303" decimals="-3" id="f-1200" unitRef="usd">-6611000</ns2:GrossProfit>
+    <ns2:GrossProfit contextRef="c-5" decimals="-3" id="f-1201" unitRef="usd">265394000</ns2:GrossProfit>
+    </ns0:xbrl>

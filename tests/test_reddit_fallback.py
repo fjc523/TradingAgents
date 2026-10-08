@@ -30,6 +30,7 @@ _SAMPLE_ATOM = """<?xml version="1.0" encoding="UTF-8"?>
 def _resp(read_fn):
     """A minimal context-manager response whose read() runs ``read_fn``."""
     class _Resp:
+        headers = {}
         def __enter__(self_inner):
             return self_inner
 

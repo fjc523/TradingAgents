@@ -221,6 +221,7 @@ class AlpacaClient:
                 articles.append(article)
             token = body.get("next_page_token")
             if limit is not None and len(articles) >= limit:
+                truncated = bool(token) or len(articles) > limit
                 break
             if not token:
                 break

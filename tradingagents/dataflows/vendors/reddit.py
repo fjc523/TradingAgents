@@ -19,6 +19,7 @@ from __future__ import annotations
 import html
 import http.client
 import logging
+import math
 import random
 import re
 import threading
@@ -134,6 +135,7 @@ _RETRY_FALLBACK_SECONDS = 60.0
 _MIN_INTERVAL_SECONDS = 60.0
 _PACE_LOCK = threading.Lock()
 _last_request_at: float | None = None
+_next_request_at = 0.0
 _clock = time.monotonic
 _pace_sleep = time.sleep
 
@@ -142,11 +144,12 @@ def _pace() -> None:
     """等待到距上一次请求满间隔后占用发送时刻；持锁等待使并行标的依次发送。"""
     global _last_request_at
     with _PACE_LOCK:
+        wait = _next_request_at - _clock()
         if _last_request_at is not None and _MIN_INTERVAL_SECONDS > 0:
-            wait = _last_request_at + _MIN_INTERVAL_SECONDS * (1.0 + random.uniform(0, 0.2)) - _clock()
-            if wait > 0:
-                logger.info("Reddit RSS pacing: waiting %.1fs before the next request", wait)
-                _pace_sleep(wait)
+            wait = max(wait, _last_request_at + _MIN_INTERVAL_SECONDS * (1.0 + random.uniform(0, 0.2)) - _clock())
+        if wait > 0:
+            logger.info("Reddit RSS pacing: waiting %.1fs before the next request", wait)
+            _pace_sleep(wait)
         _last_request_at = _clock()
 
 
@@ -162,21 +165,32 @@ def _jitter(seconds: float, frac: float = 0.2) -> float:
     return seconds * (1.0 + random.uniform(-frac, frac))
 
 
-def _retry_after_seconds(exc: HTTPError) -> float | None:
-    """Seconds to wait from a 429's ``Retry-After`` header, capped at 60s.
-
-    The cap matches ``_RETRY_FALLBACK_SECONDS``: honouring less than we would
-    wait on our own would spend the one retry on a request we already know is
-    too early.
-
-    Returns ``None`` only when the header is absent or unparseable; a valid
-    ``Retry-After: 0`` returns ``0.0`` (retry at once), not ``None``.
-    """
+def _header_seconds(headers, name):
+    """仅接受有限非负秒数，缺失和非法值不作为等待证据。"""
     try:
-        val = exc.headers.get("Retry-After") if getattr(exc, "headers", None) else None
-        return min(float(val), 60.0) if val is not None else None
+        value = float(headers.get(name))
+        return value if math.isfinite(value) and value >= 0 else None
     except (ValueError, TypeError, AttributeError):
         return None
+
+
+def _retry_after_seconds(exc: HTTPError) -> float | None:
+    """429首选Retry-After，重试等待最长90秒。"""
+    value = _header_seconds(getattr(exc, 'headers', None), 'Retry-After')
+    return min(value, 90.0) if value is not None else None
+
+
+def _cooldown(headers):
+    """成功但额度耗尽时，下次请求至少等到reset之后，不截短成功冷却。"""
+    global _next_request_at
+    try:
+        remaining = float(headers.get('x-ratelimit-remaining'))
+    except (ValueError, TypeError, AttributeError):
+        return
+    reset = _header_seconds(headers, 'x-ratelimit-reset')
+    if math.isfinite(remaining) and remaining <= 0 and reset is not None:
+        with _PACE_LOCK:
+            _next_request_at = max(_next_request_at, _clock() + reset + 2)
 
 
 # Reddit search feeds are small (a page of results); cap the read so a
@@ -224,12 +238,14 @@ def _fetch_subreddit_rss(
     try:
         with urlopen(req, timeout=timeout) as resp:
             root = ET.fromstring(_read_capped(resp))
+            _cooldown(resp.headers)
     except HTTPError as exc:
         if exc.code == 429 and _retry:
             # Honour a server-supplied Retry-After exactly (including 0); jitter
             # only our own fallback so concurrent runs don't retry in lockstep.
             retry_after = _retry_after_seconds(exc)
-            wait = retry_after if retry_after is not None else _jitter(_RETRY_FALLBACK_SECONDS)
+            reset = _header_seconds(exc.headers, "x-ratelimit-reset")
+            wait = min(retry_after if retry_after is not None else reset + 2 if reset is not None else _jitter(_RETRY_FALLBACK_SECONDS), 90.0)
             logger.warning(
                 "Reddit RSS 429 for r/%s · %s — backing off %.1fs then retrying once",
                 sub, ticker, wait,
@@ -238,7 +254,8 @@ def _fetch_subreddit_rss(
             return _fetch_subreddit_rss(ticker, sub, limit, timeout, _retry=False, errors=errors)
         logger.warning("Reddit RSS fetch failed for r/%s · %s: %s", sub, ticker, exc)
         if errors is not None:
-            errors.append(f"HTTP {exc.code}" + (" after one retry" if exc.code == 429 else ""))
+            reset = _header_seconds(exc.headers, "x-ratelimit-reset")
+            errors.append(f"HTTP {exc.code}" + (f"（reset={reset:g}s）" if exc.code == 429 and reset is not None else "") + (" after one retry" if exc.code == 429 else ""))
         return None
     except (OSError, http.client.HTTPException, ET.ParseError) as exc:
         # OSError covers URLError/TimeoutError/connection resets; HTTPException

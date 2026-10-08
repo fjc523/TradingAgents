@@ -18,6 +18,8 @@ EDGAR's ticker map falls through to the next configured vendor.
 from __future__ import annotations
 
 import json
+import copy
+import xml.etree.ElementTree as ET
 import logging
 import os
 import time
@@ -201,6 +203,7 @@ def _latest_filing(cik, as_of_date, forms=('10-Q', '10-K')):
         return None
     latest = max(candidates, key=lambda row: (row['filingDate'], row['reportDate']))
     result = {key: latest[key] for key in ('form', 'reportDate', 'filingDate')}
+    result.update(accessionNumber=latest.get('accessionNumber'), isXBRL=latest.get('isXBRL', 0))
     # Item 2.02只能证明财报发布8-K申报日，明确不等同推测的财报召开时间。
     earnings = [row['filingDate'] for row in rows if row.get('form') == '8-K'
                 and '2.02' in {item.strip() for item in str(row.get('items', '')).split(',')}]
@@ -259,17 +262,76 @@ def _as_of(facts: dict, tags: tuple[str, ...], as_of_date: str, spans: tuple[tup
     return dict(sorted(values.items())), chosen_unit
 
 
-def _statement(kind: str, ticker: str, freq: str, as_of_date: str, title: str) -> str:
-    as_of_date = as_of_date or datetime.now().strftime("%Y-%m-%d")
-    cik = cik_for(ticker)
-    if cik is None:
-        raise NoMarketDataError(ticker, ticker, "not a US SEC filer")
+def _filing_facts(cik, accession, filing_date, form):
+    """仅解析已公开原申报实例，按不可变accession缓存，不改汇总源数据。"""
+    path = Path(get_config()['data_cache_dir']) / 'sec_edgar' / f'filing_{accession}.xml'
+    if path.exists():
+        payload = path.read_bytes()
+    else:
+        base = f'https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession.replace("-", "")}/'
+        index = _fetch_json(base + 'index.json')
+        names = [item['name'] for item in index.get('directory', {}).get('item', [])
+                 if item.get('name', '').endswith('.xml')
+                 and not any(part in item['name'] for part in ('_cal', '_def', '_lab', '_pre'))
+                 and item['name'] != 'FilingSummary.xml']
+        names.sort(key=lambda name: not name.endswith('_htm.xml'))
+        payload = None
+        for name in names:
+            try:
+                response = requests.get(base + name, headers={'User-Agent': _user_agent()}, timeout=30)
+                response.raise_for_status()
+                candidate = response.content
+                root = ET.fromstring(candidate)
+            except (requests.RequestException, ET.ParseError) as exc:
+                raise VendorUnavailableError('SEC原申报实例获取或解析失败') from exc
+            if root.tag == '{http://www.xbrl.org/2003/instance}xbrl':
+                payload = candidate
+                break
+        if payload is None:
+            raise VendorUnavailableError('SEC申报目录没有XBRL实例')
+        path.parent.mkdir(parents=True, exist_ok=True)
+        replace_file(path, lambda temp: Path(temp).write_bytes(payload))
+    try:
+        root = ET.fromstring(payload)
+    except ET.ParseError as exc:
+        raise VendorUnavailableError('SEC原申报实例XML不可解析') from exc
+    ns = {'x': 'http://www.xbrl.org/2003/instance'}
+    contexts = {}
+    for context in root.findall('x:context', ns):
+        if context.find('.//x:segment', ns) is not None or context.find('x:scenario', ns) is not None:
+            continue
+        end = context.findtext('x:period/x:instant', namespaces=ns) or context.findtext('x:period/x:endDate', namespaces=ns)
+        start = context.findtext('x:period/x:startDate', namespaces=ns)
+        if end:
+            contexts[context.get('id')] = {'end': end, **({'start': start} if start else {})}
+    units = {}
+    for unit in root.findall('x:unit', ns):
+        measure = unit.findtext('x:measure', namespaces=ns)
+        numerator = unit.findtext('x:divide/x:unitNumerator/x:measure', namespaces=ns)
+        denominator = unit.findtext('x:divide/x:unitDenominator/x:measure', namespaces=ns)
+        if measure and measure.split(':')[-1] == 'USD':
+            units[unit.get('id')] = 'USD'
+        elif numerator and numerator.split(':')[-1] == 'USD' and denominator and denominator.split(':')[-1] == 'shares':
+            units[unit.get('id')] = 'USD/shares'
+    tags = {tag for lines in _STATEMENTS.values() for _, alternatives in lines for tag in alternatives}
+    facts = {}
+    for node in root:
+        if not node.tag.startswith('{http://fasb.org/us-gaap/'):
+            continue
+        tag = node.tag.split('}', 1)[-1]
+        context, unit = contexts.get(node.get('contextRef')), units.get(node.get('unitRef'))
+        if tag not in tags or not context or not unit:
+            continue
+        try:
+            value = float(node.text)
+        except (TypeError, ValueError):
+            continue
+        facts.setdefault(tag, {'units': {}})['units'].setdefault(unit, []).append(
+            dict(context, val=value, filed=filing_date, form=form, accn=accession))
+    return facts
 
-    facts = _cached_json(_FACTS_URL.format(cik=cik), f"CIK{cik}.json")
-    us_gaap = (facts.get("facts") or {}).get("us-gaap")
-    if not us_gaap:
-        raise NoMarketDataError(ticker, ticker, "US filer with no us-gaap facts")
 
+def _render_statement(kind, ticker, freq, as_of_date, title, us_gaap):
     quarterly = freq.lower() == "quarterly"
     if quarterly:
         spans = (_SPANS["quarterly"], *((low, high) for low, high, _ in _YEAR_TO_DATE))
@@ -308,6 +370,22 @@ def _statement(kind: str, ticker: str, freq: str, as_of_date: str, title: str) -
         rows.append(",".join([name] + cells))
     text = header + "\n".join(rows) + "\n"
     latest_period = max(end for end, _ in periods)
+    return text, latest_period
+
+
+def _statement(kind: str, ticker: str, freq: str, as_of_date: str, title: str) -> str:
+    as_of_date = as_of_date or datetime.now().strftime("%Y-%m-%d")
+    cik = cik_for(ticker)
+    if cik is None:
+        raise NoMarketDataError(ticker, ticker, "not a US SEC filer")
+
+    facts = _cached_json(_FACTS_URL.format(cik=cik), f"CIK{cik}.json")
+    us_gaap = (facts.get("facts") or {}).get("us-gaap")
+    if not us_gaap:
+        raise NoMarketDataError(ticker, ticker, "US filer with no us-gaap facts")
+
+    quarterly = freq.lower() == "quarterly"
+    text, latest_period = _render_statement(kind, ticker, freq, as_of_date, title, us_gaap)
     metadata = {'actual_source': 'sec_edgar', 'latest_period': latest_period,
                 'stale': False, 'reason': '', 'as_of_date': as_of_date}
     filing, unavailable = None, None
@@ -333,6 +411,24 @@ def _statement(kind: str, ticker: str, freq: str, as_of_date: str, title: str) -
             metadata['annual_covered_period'] = expected
             metadata['reason'] = f'年度申报{expected}已收录，第四季度未单列，不推算Q4；季度表体截至{latest_period}'
             text = f"# {metadata['reason']}\n" + text
+    if quarterly and filing and expected and latest_period < expected and not annual_covered and filing.get('isXBRL') in (1, True, '1') and filing.get('accessionNumber'):
+        try:
+            instance = _filing_facts(cik, filing['accessionNumber'], filing['filingDate'], filing['form'])
+            combined = copy.deepcopy(us_gaap)
+            for tag, data in instance.items():
+                for unit, values in data['units'].items():
+                    combined.setdefault(tag, {'units': {}})['units'].setdefault(unit, []).extend(values)
+            candidate, candidate_period = _render_statement(kind, ticker, freq, as_of_date, title, combined)
+            if candidate_period >= expected:
+                text, latest_period = candidate, candidate_period
+                metadata.update(latest_period=latest_period, filing_instance=filing['accessionNumber'],
+                                reason=f"SEC XBRL汇总未收录，已用原始申报XBRL实例（accn {filing['accessionNumber']}）")
+                text = f"# {metadata['reason']}\n" + text
+                if filing.get('last_earnings_filing_date'):
+                    text = f"# 上次财报发布8-K申报日：{filing['last_earnings_filing_date']}（Item 2.02）\n" + text
+        except (VendorUnavailableError, NoMarketDataError, OSError, ValueError):
+            # 原实例不可用或没有目标期时保留既有陈旧异常与后备链。
+            pass
     age = (date.fromisoformat(as_of_date) - date.fromisoformat(latest_period)).days
     stale = bool(expected and latest_period < expected and not annual_covered) or bool(unavailable and age > 135)
     if stale:
