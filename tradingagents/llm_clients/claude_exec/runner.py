@@ -166,6 +166,7 @@ class ClaudeExecRunner:
                         raise
                     argv=build_argv(self.binary,self.model,self.reasoning_effort,schema)
                     try:
+                        common.reserve_model_call('claude_exec')
                         process=self._popen(argv,cwd=cwd,env=env,stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
                     except OSError as exc:raise ClaudeConfigError('Claude本机二进制不可启动') from exc

@@ -43,6 +43,26 @@ _USAGE_CONTEXT: ContextVar[dict[str, str | None]] = ContextVar(
 )
 
 
+_CALL_GUARD: ContextVar[Any] = ContextVar("实验调用前预算守卫", default=None)
+
+
+@contextmanager
+def model_call_guard(guard):
+    """仅显式实验作用域启用；正常生产默认不改变调用行为。"""
+    token = _CALL_GUARD.set(guard)
+    try:
+        yield
+    finally:
+        _CALL_GUARD.reset(token)
+
+
+def reserve_model_call(provider):
+    """每次真实进程尝试前计量，包含失败与重试。"""
+    guard = _CALL_GUARD.get()
+    if guard is not None:
+        guard(provider, dict(_USAGE_CONTEXT.get()))
+
+
 def set_usage_context(*, ticker: str | None = None, role: str | None = None,
                       call_type: str | None = None):
     """设置当前上下文调用标签并返回可传给 reset_usage_context 的 token。"""
@@ -269,6 +289,7 @@ class CodexExecRunner:
                 schema_path.write_text(json.dumps(schema, ensure_ascii=False), encoding="utf-8")
                 argv = build_argv(self.binary, self.model, self.reasoning_effort, schema_path, output_path)
                 try:
+                    reserve_model_call('codex_exec')
                     process = self._popen(
                         argv, cwd=work_dir, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE, text=True, start_new_session=True,

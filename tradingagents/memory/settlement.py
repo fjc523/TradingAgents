@@ -114,6 +114,9 @@ def fetch_returns(
         resolution_date = exit_.strftime("%Y-%m-%d")
         return raw, alpha, holding_days, resolution_date
     except Exception as e:
+        from tradingagents.dataflows.config import get_config
+        if get_config().get('settlement_strict_errors'):
+            raise
         logger.warning(
             "Could not resolve outcome for %s on %s vs %s (will retry next run): %s",
             ticker, trade_date, benchmark, e,
