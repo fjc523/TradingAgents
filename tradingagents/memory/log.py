@@ -6,6 +6,8 @@ import hashlib
 import math
 from collections import defaultdict
 from pathlib import Path
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from tradingagents.agents.rating import parse_rating
 from tradingagents.dataflows.files import locked
@@ -101,20 +103,12 @@ class TradingMemoryLog:
     def get_past_context(
         self, ticker: str, n_same: int = 5, n_cross: int = 3, as_of: str | None = None
     ) -> str:
-        """Return formatted past context string for agent prompt injection.
-
-        When ``as_of`` (yyyy-mm-dd) is given, only lessons whose outcome was
-        already known by that date are included — an entry is kept only if it
-        stores a resolution date (``resolved:...``) that is on or before
-        ``as_of``. This keeps a historical/backtest run from learning from
-        outcomes that had not happened yet (#1251). ``as_of=None`` disables the
-        filter, so live runs and pre-migration entries are unaffected.
-        """
+        """按信息截止读取历史；带时区截止保守排除当日仅日期及未知时刻。"""
         if not (self._lesson_min == 0 and self._cross_lessons == "text"):
             return self._factual_context(ticker, n_same=n_same, n_cross=n_cross, as_of=as_of)
         entries = [e for e in self.load_entries() if not e.get("pending")]
         if as_of is not None:
-            entries = [e for e in entries if e.get("resolved") and e["resolved"] <= as_of]
+            entries = [e for e in entries if self._known_by(e.get("resolved"), as_of)]
         if not entries:
             return ""
 
@@ -148,9 +142,34 @@ class TradingMemoryLog:
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _known_by(known, as_of):
+        """完整时刻按时区比较；仅日期须等到美东下一日，未知时刻不推定。"""
+        if as_of is None:
+            return True
+        try:
+            cutoff_text = str(as_of)
+            # 日期调用保留旧接口的日终语义；生产回放传入完整冻结时刻。
+            cutoff = (datetime.combine(date.fromisoformat(cutoff_text) + timedelta(days=1), time.min, ZoneInfo("America/New_York"))
+                      if len(cutoff_text) == 10 else datetime.fromisoformat(cutoff_text))
+            if cutoff.tzinfo is None or not known:
+                return False
+            known_text = str(known)
+            if len(known_text) == 10:
+                resolved = datetime.combine(date.fromisoformat(known_text) + timedelta(days=1), time.min, ZoneInfo("America/New_York"))
+            else:
+                resolved = datetime.fromisoformat(known_text)
+                if resolved.tzinfo is None:
+                    return False
+            if len(cutoff_text) == 10 and len(known_text) != 10:
+                return resolved < cutoff
+            return resolved <= cutoff
+        except (TypeError, ValueError, OverflowError):
+            return False
+
     def _visible_facts(self, as_of):
         """C2主收益优先，旧memory事实保留标识，不改任何落盘。"""
-        entries = [dict(entry) for entry in self.load_entries() if not entry.get('pending') and (as_of is None or (entry.get('resolved') and entry['resolved'] <= as_of))]
+        entries = [dict(entry) for entry in self.load_entries() if not entry.get('pending') and (as_of is None or self._known_by(entry.get('resolved'), as_of))]
         facts = {}
         for entry in entries:
             entry['returns'] = {'5': self._return_number(entry.get('alpha'))}
@@ -167,8 +186,8 @@ class TradingMemoryLog:
                     continue
                 visible = {}
                 for days, window in row.get('windows', {}).items():
-                    known = str(window.get('settled_at') or '')[:10]
-                    if window.get('status') == 'settled' and (as_of is None or (known and known <= as_of)):
+                    known = window.get('settled_at')
+                    if window.get('status') == 'settled' and (as_of is None or self._known_by(known, as_of)):
                         value = self._return_number(window.get('primary_return'))
                         if value is not None:
                             visible[str(days)] = value
@@ -208,7 +227,7 @@ class TradingMemoryLog:
                 reflections=[entry for entry in same if entry.get('reflection')][-3:]
                 parts.extend(f"[{entry['date']} | {entry['ticker']}]\nREFLECTION:\n{entry['reflection']}" for entry in reversed(reflections))
         if self._cross_lessons=='text':
-            legacy_cross=[entry for entry in self.load_entries() if not entry.get('pending') and entry['ticker'] != ticker and (as_of is None or (entry.get('resolved') and entry['resolved'] <= as_of))]
+            legacy_cross=[entry for entry in self.load_entries() if not entry.get('pending') and entry['ticker'] != ticker and (as_of is None or self._known_by(entry.get('resolved'), as_of))]
             if legacy_cross:
                 parts.append('Recent cross-ticker lessons:')
                 parts.extend(self._format_reflection_only(entry) for entry in reversed(legacy_cross[-n_cross:]) if n_cross)

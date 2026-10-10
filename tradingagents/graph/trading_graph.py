@@ -153,14 +153,10 @@ class TradingAgentsGraph:
         identity = resolve_instrument_identity(ticker)
         return build_instrument_context(ticker, asset_type, identity, trade_date)
 
-    def _memory_as_of(self, trade_date) -> str | None:
-        """Point-in-time cutoff for past-context lessons (#1251).
-
-        A historical/backtest run (trade date before today) filters lessons to
-        those already resolved by the trade date. A current-date run returns
-        None, disabling the filter so live behavior and pre-migration entries
-        (which have no stored resolution date) are unaffected.
-        """
+    def _memory_as_of(self, trade_date, information_cutoff=None) -> str | None:
+        """显式冻结截止优先，不能因回放日期等于今天解除过滤。"""
+        if information_cutoff is not None:
+            return information_cutoff.isoformat() if hasattr(information_cutoff, "isoformat") else str(information_cutoff)
         return str(trade_date) if is_historical(trade_date) else None
 
     def _run_signature(self, asset_type: str, portfolio=None) -> str:
