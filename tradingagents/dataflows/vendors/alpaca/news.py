@@ -27,7 +27,8 @@ def _format(title: str, result: dict, start: datetime, end: datetime) -> str:
             lines.append("内容可能已在截止后修订。")
         lines.append("")
     if result.get("truncated"):
-        lines.append(f"结果已截断，仅含最新 {len(articles)} 条。")
+        earliest = min(articles, key=lambda item: _parse_created(item.get("created_at")) or datetime.max.replace(tzinfo=UTC)).get("created_at", "未知")
+        lines.append(f"结果已截断，仅含最新 {len(articles)} 条。最早一条 created_at={earliest}；窗口起点 {start.isoformat()} 至该时刻之间未覆盖，可缩小日期窗口再查。")
     return "\n".join(lines)
 
 
