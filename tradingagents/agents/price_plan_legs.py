@@ -19,7 +19,7 @@ class BuyLeg(BaseModel):
     stop_loss: float | None = None
     stop_anchor: str | None = Field(default=None, description='具名支撑及缓冲，例如P_Low−0.03ATR')
     first_target: float | None = None
-    target_method: str | None = Field(default=None, description='阻力位或ATR替代')
+    target_method: Literal['阻力位', 'ATR替代'] | None = Field(default=None, description='阻力位或ATR替代')
     target_anchor: str | None = None
     reason: str | None = Field(default=None, description='≤120字，依据或未通过检查')
     preconditions: str | None = Field(default=None, description='≤80字，非价格前置条件、事件窗口或期限兜底；没有留空')
