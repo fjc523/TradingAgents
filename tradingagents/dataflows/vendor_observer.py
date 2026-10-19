@@ -18,7 +18,7 @@ def reset_vendor_observer(token):
     _OBSERVER.reset(token)
 
 
-def report_vendor(method, vendor, outcome, *, duration=0, error=None, symbol=None, statement_metadata=None):
+def report_vendor(method, vendor, outcome, *, duration=0, error=None, symbol=None, statement_metadata=None, provider_health=None):
     callback = _OBSERVER.get()
     if callback is None:
         return
@@ -26,7 +26,8 @@ def report_vendor(method, vendor, outcome, *, duration=0, error=None, symbol=Non
         callback({"method": method, "source": vendor, "outcome": outcome,
                   "duration_seconds": duration, "error": error, "symbol": symbol,
                   "recorded_at": datetime.now(timezone.utc).isoformat(),
-                  **({"statement_metadata": statement_metadata} if statement_metadata else {})})
+                  **({"statement_metadata": statement_metadata} if statement_metadata else {}),
+                  **({"provider_health": provider_health} if provider_health else {})})
     except Exception:
         # 观察者不能改变来源调用本身的结果。
         pass
