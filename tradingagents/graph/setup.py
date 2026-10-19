@@ -168,7 +168,7 @@ class GraphSetup:
 
         for spec in plan.specs:
             analyst_graph = _analyst_graph(spec, analyst_factories[spec.key](), self.max_tool_rounds)
-            if self.config.get('market_context'):
+            if self.config.get('codex_prompt_log_dir'):
                 # 子图内部agent/tools元数据覆盖节点名，显式保留分析师真实身份。
                 analyst_graph = analyst_graph.with_config(metadata={'tu59_role':spec.agent_node})
             workflow.add_node(spec.agent_node, analyst_graph)
