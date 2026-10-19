@@ -64,10 +64,10 @@ def reserve_model_call(provider):
 
 
 def set_usage_context(*, ticker: str | None = None, role: str | None = None,
-                      call_type: str | None = None):
+                      call_type: str | None = None, run_id: str | None = None):
     """设置当前上下文调用标签并返回可传给 reset_usage_context 的 token。"""
     merged = dict(_USAGE_CONTEXT.get())
-    for key, value in (("ticker", ticker), ("role", role), ("call_type", call_type)):
+    for key, value in (("ticker", ticker), ("role", role), ("call_type", call_type), ("run_id", run_id)):
         if value is not None:
             merged[key] = value
     return _USAGE_CONTEXT.set(merged)
@@ -79,9 +79,9 @@ def reset_usage_context(token) -> None:
 
 @contextmanager
 def codex_usage_context(*, ticker: str | None = None, role: str | None = None,
-                        call_type: str | None = None):
+                        call_type: str | None = None, run_id: str | None = None):
     """临时标记当前模型调用，适用于主项目按标的注入的上下文。"""
-    token = set_usage_context(ticker=ticker, role=role, call_type=call_type)
+    token = set_usage_context(ticker=ticker, role=role, call_type=call_type, run_id=run_id)
     try:
         yield
     finally:
@@ -276,6 +276,9 @@ class CodexExecRunner:
             _release_slot()
 
     def _run(self, prompt: str, schema: dict[str, Any]) -> CodexResult:
+        from .audit import market_payload, redact, write_record
+        prompt = redact(market_payload(prompt))
+        schema = json.loads(market_payload(json.dumps({"output_schema": schema}, ensure_ascii=False)))["output_schema"]
         delays = (30, 120, 300)
         last_error: str = "Codex 调用失败"
         for attempt in range(self.retries + 1):
@@ -288,6 +291,13 @@ class CodexExecRunner:
                 output_path = Path(meta_dir) / "output.json"
                 schema_path.write_text(json.dumps(schema, ensure_ascii=False), encoding="utf-8")
                 argv = build_argv(self.binary, self.model, self.reasoning_effort, schema_path, output_path)
+                audit_id = None
+                if self.prompt_log_dir:
+                    audit_id = write_record(self.prompt_log_dir, {
+                        "phase": "input", "context": _USAGE_CONTEXT.get(), "attempt": attempt,
+                        "model": self.model, "reasoning_effort": self.reasoning_effort,
+                        "prompt": prompt, "output_schema": schema,
+                    })
                 try:
                     reserve_model_call('codex_exec')
                     process = self._popen(
@@ -318,6 +328,12 @@ class CodexExecRunner:
                         _ACTIVE.discard(process)
                 if _ABORT.is_set():
                     raise CodexAbortedError("Codex 子进程已被全局中止")
+                if self.prompt_log_dir:
+                    write_record(self.prompt_log_dir, {
+                        "phase": "output", "call_id": audit_id, "context": _USAGE_CONTEXT.get(), "attempt": attempt,
+                        "stdout": stdout or "", "stderr": stderr or "", "returncode": process.returncode,
+                        "output": output_path.read_text(encoding="utf-8") if output_path.exists() else None,
+                    }, call_id=audit_id + "-output")
                 events = parse_events(stdout or "")
                 warnings = list(events.get("config_drift", []))
                 for line in (stderr or "").splitlines():
@@ -338,6 +354,8 @@ class CodexExecRunner:
                             prompt, events, result="success", retry=attempt,
                             duration_seconds=max(0.0, self._monotonic() - attempt_started),
                         )
+                        if audit_id:
+                            events['audit_call_id'] = audit_id
                         return CodexResult(output=output, events=events, argv=argv)
                 category = _classify(
                     (stderr or "") + "\n" + _failure_text(stdout or ""),
@@ -390,7 +408,9 @@ class CodexExecRunner:
                 stream.write(json.dumps(row, ensure_ascii=False) + "\n")
         if self.prompt_log_dir:
             directory = Path(self.prompt_log_dir).expanduser()
-            directory.mkdir(parents=True, exist_ok=True)
+            directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+            directory.chmod(0o700)
             path = directory / "prompts.jsonl"
             with path.open("a", encoding="utf-8") as stream:
                 stream.write(json.dumps({"prompt": prompt}, ensure_ascii=False) + "\n")
+            path.chmod(0o600)

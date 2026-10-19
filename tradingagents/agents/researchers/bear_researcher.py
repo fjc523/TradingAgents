@@ -7,7 +7,11 @@ from tradingagents.agents.context import (
 )
 
 
-def create_bear_researcher(llm):
+def create_bear_researcher(llm, config=None):
+    from tradingagents.agents.market_contract import instruction_template, market_instruction
+    if config is None:
+        from tradingagents.dataflows.config import get_config
+        config = get_config()
     def bear_node(state) -> dict:
         investment_debate_state = state["investment_debate_state"]
         history = investment_debate_state.get("history", "")
@@ -28,6 +32,7 @@ def create_bear_researcher(llm):
             "关注公司最新季度趋势、竞争地位、估值、财报与行业事件。"
             if asset_type == "stock" else "关注资产自身供需、流动性和波动，不假设存在公司财务。"
         )
+        focus = instruction_template(focus, config) + market_instruction(config)
         prompt = f"""你是空头研究员，围绕决策周期陈述本方论点，不给交易结论。{focus}
 输出依次为：最强3条论据（注明来源报告）；承认对方有效论点；什么证据推翻本方观点；论证强度1–5。每次发言≤900字。
 数字必须来自输入，推算须标注“推算”及输入数据。对方未发言时先提出本方论据，不捏造其发言。

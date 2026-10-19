@@ -106,6 +106,8 @@ def test_on_windows_the_lock_is_waited_for_while_another_writer_holds_it(tmp_pat
     import errno
     import sys
 
+    # macOS模拟Windows分支时补齐Windows errno别名，不改变产品锁逻辑。
+    monkeypatch.setattr(errno, "EDEADLOCK", getattr(errno, "EDEADLOCK", errno.EDEADLK), raising=False)
     fake, calls = _fake_msvcrt([OSError(errno.EDEADLOCK, "held"), None])
     monkeypatch.setitem(sys.modules, "msvcrt", fake)
 
@@ -120,6 +122,7 @@ def test_on_windows_a_lock_that_cannot_be_taken_is_reported_not_retried_forever(
     import errno
     import sys
 
+    monkeypatch.setattr(errno, "EDEADLOCK", getattr(errno, "EDEADLOCK", errno.EDEADLK), raising=False)
     fake, _ = _fake_msvcrt([OSError(errno.EINVAL, "bad handle")] * 3)
     monkeypatch.setitem(sys.modules, "msvcrt", fake)
 

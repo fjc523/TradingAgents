@@ -58,8 +58,10 @@ def rating_definitions(config=None):
         text = text.replace('不固定映射比例', '配置按allocation_bands区间')
         text += '\n目标配置须满足allocation_bands区间（见统一配置说明），与入场时机分开。'
     if config.get('rating_probability_fields', True):
-        text += '\n' + PROBABILITY_INSTRUCTION
-    return text
+        from tradingagents.agents.market_contract import instruction_template
+        text += '\n' + instruction_template(PROBABILITY_INSTRUCTION, config)
+    from tradingagents.agents.market_contract import market_instruction
+    return text + market_instruction(config)
 
 
 # Signal emitted when the model's decision has no recognizable rating. It is not

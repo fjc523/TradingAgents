@@ -173,7 +173,9 @@ def legs_instruction(config=None):
     tolerance = (config or {}).get('allocation_tolerance_pct', 10)
     note = (f'与目标相差<{tolerance:g}个百分点视为达标、不动'
             if tolerance > 0 else '容差关闭，按目标精确比较')
-    return LEGS_INSTRUCTION.replace('与目标相差小于配置容差视为达标、不动', note) + (
+    from tradingagents.agents.market_contract import instruction_template
+    template = instruction_template(LEGS_INSTRUCTION, config)
+    return template.replace('与目标相差小于配置容差视为达标、不动', note) + (
         'stop_anchor、target_anchor必须使用输入锚点表的键名（例如P_Low、close_50_sma、20d_High）；'
         '未知锚点不得猜测对应键名，ATR替代明确写目标方法。'
         'trigger_rule只填枚举值本身；价格写trigger_price，确认天数写confirm_days，其他条件写preconditions或原文。'

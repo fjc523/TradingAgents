@@ -348,7 +348,8 @@ def price_plan_instruction(config=None) -> str:
         text = re.sub(r'Buy/Overweight没有合格入场点时保持评级；当前无合格入场点.*?Underweight或Sell不新建仓。', '', text)
         text = text.replace('减仓面向已有仓位，说明减配或止损的触发条件；每项首句固定为「区间 X–Y 美元（依据：具体价位名称）」或「不适用：原因」，供首页展示。', '')
         text += legs_instruction(config)
-    return text
+    from tradingagents.agents.market_contract import instruction_template
+    return instruction_template(text, config)
 
 
 # 旧导入仍可使用缺省渲染结果；角色运行时调用函数读取配置。
@@ -772,7 +773,27 @@ def _extended_decision_schema(base, prices, probabilities, layer, timing, legs=F
 def decision_schema(base, config, layer):
     """每项关闭恢复旧字段；不顺带关闭其他功能。"""
     original=_SCHEMA_BASES.get(base,base)
-    return _extended_decision_schema(original,config.get('price_plan_evaluation_enabled',True),config.get('rating_probability_fields',True),layer,config.get('rating_timing_decoupled',True),config.get('price_plan_legs',True))
+    model = _extended_decision_schema(original,config.get('price_plan_evaluation_enabled',True),config.get('rating_probability_fields',True),layer,config.get('rating_timing_decoupled',True),config.get('price_plan_legs',True))
+    market = config.get('market_context')
+    return _market_decision_schema(model, market['quote_currency'], market['benchmark_symbol']) if market else model
+
+
+@lru_cache(maxsize=64)
+def _market_decision_schema(base, currency, benchmark):
+    """复制字段元数据，不污染缓存的美国schema或既有校验器。"""
+    from copy import deepcopy
+    from tradingagents.agents.market_contract import instruction_template
+    config = {'market_context': {'quote_currency': currency, 'benchmark_symbol': benchmark}}
+    fields = {}
+    for name, field in base.model_fields.items():
+        info = deepcopy(field)
+        if info.description:
+            info.description = instruction_template(info.description, config)
+        fields[name] = (field.annotation, info)
+    model = create_model(base.__name__ + currency, __base__=base, **fields)
+    if base in _LEG_DECISION_MODELS:
+        _LEG_DECISION_MODELS.add(model)
+    return model
 
 
 def _probability_lines(model):

@@ -138,20 +138,24 @@ class GraphSetup:
         """
         plan = build_analyst_execution_plan(selected_analysts)
         from tradingagents.agents.analysts.news_analyst import available_news_tools
-        plan = replace(plan, specs=[replace(spec, tools=available_news_tools()) if spec.key == "news" else spec for spec in plan.specs])
+        plan = replace(plan, specs=[replace(spec, tools=available_news_tools(self.config)) if spec.key == "news" else spec for spec in plan.specs])
 
         from tradingagents.agents.analysts.fundamentals_analyst import available_tools
         plan = replace(plan, specs=[replace(spec, tools=available_tools(self.config)) if spec.key == "fundamentals" else spec for spec in plan.specs])
 
+        if self.config.get("local_market_bundle"):
+            from tradingagents.agents.local_market_tools import TOOLS as local_tools
+            plan = replace(plan, specs=[replace(spec, tools=local_tools.get(spec.key, ())) for spec in plan.specs])
+
         analyst_factories = {
-            "market": lambda: create_market_analyst(self.quick_thinking_llm),
+            "market": lambda: create_market_analyst(self.quick_thinking_llm, self.config),
             "social": lambda: create_sentiment_analyst(self.quick_thinking_llm, self.config),
-            "news": lambda: create_news_analyst(self.quick_thinking_llm),
+            "news": lambda: create_news_analyst(self.quick_thinking_llm, self.config),
             "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm, self.config),
         }
 
-        bull_researcher_node = create_bull_researcher(self.role_llms.get("bull", self.quick_thinking_llm))
-        bear_researcher_node = create_bear_researcher(self.role_llms.get("bear", self.quick_thinking_llm))
+        bull_researcher_node = create_bull_researcher(self.role_llms.get("bull", self.quick_thinking_llm), self.config)
+        bear_researcher_node = create_bear_researcher(self.role_llms.get("bear", self.quick_thinking_llm), self.config)
         research_manager_node = create_research_manager(self.role_llms.get("research_manager", self.deep_thinking_llm), self.config)
         trader_node = create_trader(self.role_llms.get("trader", self.deep_thinking_llm), self.config)
 
@@ -163,15 +167,18 @@ class GraphSetup:
         workflow = StateGraph(AgentState)
 
         for spec in plan.specs:
-            workflow.add_node(spec.agent_node,
-                              _analyst_graph(spec, analyst_factories[spec.key](), self.max_tool_rounds))
+            analyst_graph = _analyst_graph(spec, analyst_factories[spec.key](), self.max_tool_rounds)
+            if self.config.get('market_context'):
+                # 子图内部agent/tools元数据覆盖节点名，显式保留分析师真实身份。
+                analyst_graph = analyst_graph.with_config(metadata={'tu59_role':spec.agent_node})
+            workflow.add_node(spec.agent_node, analyst_graph)
 
         structured_debate = self.config.get('debate_mode', 'structured') == 'structured'
         if structured_debate:
             from tradingagents.agents.researchers.structured_debate import create_research_turn, join_research_debate
             for side, label in [('bull', 'Bull'), ('bear', 'Bear')]:
                 for phase in ['opening', 'rebuttal']:
-                    workflow.add_node(f'{label} {phase.capitalize()}', create_research_turn(self.role_llms.get(side, self.quick_thinking_llm), side, phase))
+                    workflow.add_node(f'{label} {phase.capitalize()}', create_research_turn(self.role_llms.get(side, self.quick_thinking_llm), side, phase, self.config))
             workflow.add_node('Research Rebuttals', lambda state: {})
             workflow.add_node('Research Debate Summary', join_research_debate)
         else:

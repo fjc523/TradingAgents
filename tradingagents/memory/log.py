@@ -34,6 +34,7 @@ class TradingMemoryLog:
         self._lesson_min = cfg.get("lesson_min_settled_same_ticker", 10)
         self._cross_lessons = cfg.get("cross_ticker_lessons", "stats")
         self._outcomes_path = cfg.get("evaluation_outcomes_path")
+        self._market_context = cfg.get("market_context") or {}
 
     # --- Write: a run records its decision ---
 
@@ -171,7 +172,8 @@ class TradingMemoryLog:
         """C2主收益优先，旧memory事实保留标识，不改任何落盘。"""
         entries = [dict(entry) for entry in self.load_entries() if not entry.get('pending') and (as_of is None or self._known_by(entry.get('resolved'), as_of))]
         facts = {}
-        for entry in entries:
+        legacy = {(entry['date'], entry['ticker']): entry for entry in entries}
+        for entry in ([] if self._market_context else entries):
             entry['returns'] = {'5': self._return_number(entry.get('alpha'))}
             entry['basis'] = '旧memory 5日tag收益（可能为超额或绝对，未证明C2口径）'
             facts[(entry['date'], entry['ticker'])] = entry
@@ -181,8 +183,17 @@ class TradingMemoryLog:
             except (OSError, ValueError):
                 # 损坏的独立评估不能变成伪造事实；仍保留旧memory的明确口径。
                 outcomes = []
+            if self._market_context:
+                from daily_analyzer.semantic_review import visible_local_decisions
+                outcomes = visible_local_decisions(outcomes)
             for row in outcomes:
-                if not row.get('is_current'):
+                if self._market_context and (row.get('market') != self._market_context.get('market') or row.get('policy') != self._market_context.get('benchmark_policy')):
+                    continue
+                if self._market_context:
+                    from daily_analyzer.semantic_review import verified
+                    if row.get('semantic_status') != 'verified' or not row.get('result_path') or not verified(row['result_path']):
+                        continue
+                elif not row.get('is_current'):
                     continue
                 visible = {}
                 for days, window in row.get('windows', {}).items():
@@ -194,7 +205,7 @@ class TradingMemoryLog:
                 if not visible:
                     continue
                 key=(row['trade_date'], row['symbol'])
-                old=facts.get(key, {})
+                old=legacy.get(key, {}) if self._market_context else facts.get(key, {})
                 same_identity=bool(old.get('decision') and row.get('decision_fingerprint') == hashlib.sha256(old['decision'].encode('utf-8')).hexdigest())
                 facts[key]={**old, 'date':row['trade_date'], 'ticker':row['symbol'], 'rating':row.get('ratings',{}).get('pm') or '未提供',
                             'returns':visible, 'basis':'C2 '+str(row.get('primary_metric') or '未提供'), 'reflection':old.get('reflection','') if same_identity else '', 'reflection_association':'精确决策正文一致' if same_identity else '反思关联不可得（C2 current与旧memory决策身份未核验）'}

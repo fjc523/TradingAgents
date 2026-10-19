@@ -82,7 +82,11 @@ class CodexExecChatModel(BaseChatModel):
         usage_context = getattr(self.runner, "role", None)
         # 主项目可在 runner 外标记标的，避免修改批次共享配置。
         from .runner import set_usage_context, reset_usage_context
-        token = set_usage_context(role=usage_context, call_type=self.output_mode)
+        from .runner import _USAGE_CONTEXT
+        current = _USAGE_CONTEXT.get()
+        # 新市场原runner带run_id，节点回调已绑定真实角色；quick/deep只表示模型档，不覆盖节点。
+        role = current.get('role') if current.get('run_id') and current.get('role') else usage_context
+        token = set_usage_context(role=role, call_type=self.output_mode)
         schema = self.response_schema or CONTENT_SCHEMA
         last_error = None
         result = None
@@ -93,8 +97,21 @@ class CodexExecChatModel(BaseChatModel):
                     message = self._message(result.output, result.events)
                     if self.output_mode == "tools":
                         self._validate_tool_calls(message.tool_calls)
+                    audit_id = result.events.get('audit_call_id')
+                    if audit_id and getattr(self.runner, 'prompt_log_dir', None):
+                        from .audit import write_record
+                        from pathlib import Path
+                        write_record(Path(self.runner.prompt_log_dir) / 'messages', {
+                            'phase':'assistant_message', 'model_call_id':audit_id,
+                            'context':dict(_USAGE_CONTEXT.get()), 'message':message.model_dump(mode='json')}, call_id=audit_id)
                     break
                 except CodexOutputFormatError as exc:
+                    if result is not None and result.events.get('audit_call_id') and getattr(self.runner, 'prompt_log_dir', None):
+                        from .audit import write_record
+                        from pathlib import Path
+                        identity = result.events['audit_call_id']
+                        write_record(Path(self.runner.prompt_log_dir) / 'messages', {'phase':'assistant_rejected',
+                            'model_call_id':identity,'context':dict(_USAGE_CONTEXT.get()),'error':str(exc)},call_id=identity)
                     if self.output_mode != "tools":
                         raise
                     last_error = exc

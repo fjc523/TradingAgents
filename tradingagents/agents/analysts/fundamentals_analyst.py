@@ -26,6 +26,9 @@ def available_tools(config=None, asset_type="stock"):
     if config is None:
         from tradingagents.dataflows.config import get_config
         config = get_config()
+    if config.get("local_market_bundle"):
+        from tradingagents.agents.local_market_tools import TOOLS as local_tools
+        return local_tools["fundamentals"]
     return TOOLS + (get_earnings_expectations,) if config.get('earnings_expectations_enabled', True) and asset_type == 'stock' else TOOLS
 
 
@@ -42,6 +45,9 @@ def create_fundamentals_analyst(llm, config=None):
             if state.get("asset_type", "stock") == "etf"
             else "公司口径：下次财报是否在决策周期内、最新季度同比/环比和利润率、自由现金流与流动性、估值及内部人交易。"
         )
+        local_market = bool(config.get("local_market_bundle"))
+        if local_market:
+            focus = "公司口径：按实际已披露中期/年度/季度及可比期间、原始币种和倍数分析，不虚构季度趋势；财报事件日期未核验写未确认。"
         system_message = (
             "你是基本面分析师，关注中短期决策周期内的约束。" + focus
             + "使用get_fundamentals、get_balance_sheet、get_cashflow、get_income_statement和get_insider_transactions。"
@@ -54,6 +60,10 @@ def create_fundamentals_analyst(llm, config=None):
             + get_language_instruction()
         )
 
+        if local_market:
+            system_message = ("你是基本面分析师，关注未来5–20个本地交易日。" + focus +
+                "使用本次官方披露工具；核对收入、归母净利润、经营现金流、资本开支/FCF、现金及资产；逐项引用期间、单位、PDF物理页和链接。"
+                "报价与财务币种分开，无FX证据不混算。资本开支/FCF写明推导；未披露核心字段明确失败，不补造。正文≤1500字。" + get_language_instruction())
         tools = available_tools(config, state.get("asset_type", "stock"))
         if get_earnings_expectations in tools:
             system_message += "必须调用get_earnings_expectations；数据可用时单列‘预期与修正’小节，引用修正方向及幅度；不可得或回放不可用时明确原因，不用当前预期填历史。"

@@ -18,11 +18,15 @@ TOOLS = (
 )
 
 
-def available_news_tools():
+def available_news_tools(config=None):
     """只有未配置FRED时不绑定宏观工具，富途来源保留。"""
     import os
     from tradingagents.dataflows.router import get_vendor
     from tradingagents.dataflows.config import get_config
+    config = get_config() if config is None else config
+    if config.get("local_market_bundle"):
+        from tradingagents.agents.local_market_tools import TOOLS as local_tools
+        return local_tools["news"]
     chain = get_vendor("macro_data", "get_macro_indicators")
     if chain == "default":
         chain = "fred"
@@ -30,8 +34,8 @@ def available_news_tools():
     return tuple(tool for tool in TOOLS if tool.name != "get_macro_indicators" or names != ["fred"] or os.environ.get("FRED_API_KEY"))
 
 
-def create_news_analyst(llm):
-    tools = available_news_tools()
+def create_news_analyst(llm, config=None):
+    tools = available_news_tools(config)
     def news_analyst_node(state):
         current_date = state["trade_date"]
         asset_type = state.get("asset_type", "stock")

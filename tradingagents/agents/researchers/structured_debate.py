@@ -4,7 +4,7 @@ from tradingagents.agents.context import get_instrument_context_from_state, get_
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS
 
 
-def create_research_turn(llm, side, phase):
+def create_research_turn(llm, side, phase, config=None):
     """首轮不接触历史或对方文本；反驳只读取屏障后已完成的对方首轮。"""
     role = '多头' if side == 'bull' else '空头'
     opponent = 'bear' if side == 'bull' else 'bull'
@@ -18,7 +18,8 @@ def create_research_turn(llm, side, phase):
                                         ('news_report', '新闻报告', 'news')])
         context = get_instrument_context_from_state(state, profile=f'{side}_researcher')
         prompt = f'你是{role}研究员，本次只完成' + ('首轮陈述。\n' if phase == 'opening' else '针对对方首轮的反驳。\n')
-        prompt += context + '\n\n' + reports
+        from tradingagents.agents.market_contract import market_instruction
+        prompt += market_instruction(config) + context + '\n\n' + reports
         if phase == 'opening':
             prompt += '\n\n输出编号1–3的最强论据，每条注明报告来源和输入中的具体数字，并列出可证伪条件。全文≤700字。当前双方同时首轮，不预判、编造或回应对方发言，不给交易结论。'
         else:

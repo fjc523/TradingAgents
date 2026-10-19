@@ -39,7 +39,12 @@ def test_yfinance_keeps_its_cache_out_of_the_users_home():
 
     from yfinance.cache import _TzDBManager
 
-    assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())
+    import tempfile
+    cache = Path(_TzDBManager.get_location()).resolve()
+    # arc可位于用户目录内；须证明使用本测试临时目录而非默认生产cache。
+    assert cache.is_relative_to(Path(tempfile.gettempdir()).resolve())
+    assert cache.name.startswith("tradingagents-tests-yf-")
+    assert cache not in {(Path.home()/"Library/Caches/py-yfinance").resolve(),(Path.home()/".cache/py-yfinance").resolve()}
 
 
 @pytest.mark.unit
