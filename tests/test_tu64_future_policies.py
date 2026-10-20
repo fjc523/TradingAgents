@@ -23,6 +23,9 @@ def test_shared_budget_and_initial_subwindow():
     assert '消息1' in first and len(calls) == 3
     subset = bounded_news.read('A', NOW - timedelta(hours=1), NOW + timedelta(days=1), config, Client())
     assert '消息1' not in subset and '消息3' in subset and len(calls) == 3
+    audit = bounded_news.audit_for(config['_daily_run_id'], 'A')
+    assert audit['cache_hits'] == 1 and audit['propagated_bytes'] > audit['new_prompt_bytes']
+    assert audit['elapsed_seconds'] >= 0 and audit['monetary_cost'] == 'UNKNOWN'
 
 
 def test_research_failure_preserves_waterline(monkeypatch):

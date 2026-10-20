@@ -9,6 +9,7 @@ import json
 import os
 import re
 import threading
+import time
 import unicodedata
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from zoneinfo import ZoneInfo
@@ -58,6 +59,7 @@ def identity(row):
 
 def read(ticker, start, nominal_end, config, client):
     """initial只查询一次三段，两个补抓阶段分别独占一次HTTP。"""
+    timer = time.perf_counter()
     stage_info = _STAGE.get()
     stage, previous, started = stage_info if stage_info else ('initial', None, None)
     clock = config.get('_late_news_clock') or config.get('_daily_live_information_clock')
@@ -72,15 +74,23 @@ def read(ticker, start, nominal_end, config, client):
     with _LOCK:
         state = _STATES.setdefault(key, {'responses': {}, 'articles': {}, 'late_count': 0,
             'audit': {'policy': 'bounded-stock-news-v1', 'stages': {}, 'http_attempts': 0,
-                'legacy_prompt_bytes': 'NOT_MEASURABLE', 'new_prompt_bytes': 0, 'module_path': __file__, 'pid': os.getpid()}})
+                'legacy_prompt_bytes': 'NOT_MEASURABLE', 'new_prompt_bytes': 0, 'module_path': __file__, 'pid': os.getpid(),
+                'cache_hits': 0, 'propagated_bytes': 0, 'cached_propagated_bytes': 0, 'elapsed_seconds': 0.0,
+                'role_attribution': 'NOT_MEASURABLE', 'monetary_cost': 'UNKNOWN'}})
         if stage in state['responses']:
+            state['audit']['cache_hits'] += 1
+            cached_text = state['responses'][stage]
             if stage == 'initial':
                 cached_meta = state['audit']['stages'][stage]
                 if start.isoformat() != cached_meta['effective_start'] or end.isoformat() != cached_meta['effective_end']:
                     selected = state.get('rendered', {}).get(stage, [])
                     cached = [text for row, text in selected if (published := stamp(row.get('created_at'))) and start <= published < end]
-                    return '\n'.join(cached) + '\n缓存子窗口筛选；未重新请求供应商，缓存外覆盖未知。'
-            return state['responses'][stage]
+                    cached_text = '\n'.join(cached) + '\n缓存子窗口筛选；未重新请求供应商，缓存外覆盖未知。'
+            size = len(cached_text.encode())
+            state['audit']['cached_propagated_bytes'] += size
+            state['audit']['propagated_bytes'] += size
+            state['audit']['elapsed_seconds'] += time.perf_counter() - timer
+            return cached_text
         if stage != 'initial' and previous:
             start = max(start, previous.astimezone(timezone.utc))
         meta = {'stage': stage, 'request_started_at': started.isoformat(), 'nominal_end': nominal_end.isoformat(),
@@ -129,7 +139,8 @@ def read(ticker, start, nominal_end, config, client):
         meta['deduplicated_count'] = len(unique)
         # initial已呈现的同一版本不再占补抓额度；内容修订仍按截止证据排除。
         if stage != 'initial':
-            unique = {k: v for k, v in unique.items() if k not in state['articles']}
+            unique = {k: v for k, v in unique.items() if k not in state['articles'] or
+                any(v.get(field) != state['articles'][k].get(field) for field in ('headline', 'summary', 'updated_at'))}
         by_day = defaultdict(list)
         for k, row in unique.items():
             by_day[stamp(row['created_at']).astimezone(ET).date().isoformat()].append((k, row))
@@ -177,7 +188,10 @@ def read(ticker, start, nominal_end, config, client):
         result_text = '\n'.join(blocks) + '\n' + notice
         assert len(result_text.encode()) <= byte_cap
         meta['prompt_bytes'] = len(result_text.encode())
+        meta['elapsed_seconds'] = time.perf_counter() - timer
+        state['audit']['elapsed_seconds'] += meta['elapsed_seconds']
         state['audit']['new_prompt_bytes'] += meta['prompt_bytes']
+        state['audit']['propagated_bytes'] += meta['prompt_bytes']
         if stage != 'initial':
             state['late_count'] += len(selected)
         state['articles'].update(selected)
