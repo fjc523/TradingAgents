@@ -93,6 +93,13 @@ def _analyst_graph(spec, agent, max_tool_rounds: int):
             stamp = current_time().isoformat()
             result = tools_node.invoke(state, config)
             if "get_news" in calls(state["messages"][-1:]):
+                from tradingagents.dataflows.config import get_config
+                from tradingagents.dataflows.vendors.alpaca.bounded_news import audit_for, enabled
+                settings = get_config()
+                if enabled(settings):
+                    audit = audit_for(settings.get('_daily_run_id'), settings.get('_analysis_symbol') or state['company_of_interest'])
+                    # initial缓存命中不延后真实请求终点，避免补抓跳过尚未请求的窗口。
+                    stamp = (audit or {}).get('stages', {}).get('initial', {}).get('effective_end', stamp)
                 result["news_last_fetched_at"] = stamp
             return result
         graph.add_node("tools", news_tools)
