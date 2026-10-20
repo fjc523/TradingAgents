@@ -190,6 +190,7 @@ class AlpacaClient:
         *,
         limit: int | None = None,
         max_pages: int = 20,
+        single_attempt: bool = False,
     ) -> dict[str, Any]:
         if limit is not None and limit <= 0:
             return {"articles": [], "truncated": False}
@@ -209,7 +210,11 @@ class AlpacaClient:
         while pages < max_pages:
             if token:
                 params["page_token"] = token
-            body = self._get(f"{_DATA_URL}/v1beta1/news", params)
+            body = self._get(f"{_DATA_URL}/v1beta1/news", params, **({"retries": 0} if single_attempt else {}))
+            raw_news = body.get("news", []) or []
+            over_page = len(raw_news) > 50
+            if single_attempt:
+                body = {**body, "news": raw_news[:50]}
             pages += 1
             for item in body.get("news", []) or []:
                 created = _parse_timestamp(item.get("created_at"))
@@ -230,7 +235,7 @@ class AlpacaClient:
         articles.sort(key=lambda item: _parse_timestamp(item.get("created_at")) or datetime.min.replace(tzinfo=UTC), reverse=True)
         if limit is not None:
             articles = articles[:limit]
-        return {"articles": articles, "truncated": truncated}
+        return {"articles": articles, "truncated": truncated, **({"next_page_token": token, "over_page": over_page} if single_attempt else {})}
 
 
 def _utc(value: datetime) -> datetime:

@@ -35,6 +35,11 @@ class TradingMemoryLog:
         self._cross_lessons = cfg.get("cross_ticker_lessons", "stats")
         self._outcomes_path = cfg.get("evaluation_outcomes_path")
         self._market_context = cfg.get("market_context") or {}
+        self._fact_policy = cfg.get("memory_fact_policy", "legacy")
+        self._current_run = cfg.get("_daily_run_id")
+        self._aliases = cfg.get("_memory_aliases") or {}
+        self.fact_audit = None
+        self.fact_aliases = {}
 
     # --- Write: a run records its decision ---
 
@@ -170,6 +175,11 @@ class TradingMemoryLog:
 
     def _visible_facts(self, as_of):
         """C2主收益优先，旧memory事实保留标识，不改任何落盘。"""
+        if not self._market_context and self._fact_policy != 'legacy':
+            if self._fact_policy != 'w4-visible-v1':
+                raise ValueError('policy_unsupported: memory_fact_policy')
+            from .future_facts import build_facts
+            return build_facts(self, as_of)
         entries = [dict(entry) for entry in self.load_entries() if not entry.get('pending') and (as_of is None or self._known_by(entry.get('resolved'), as_of))]
         facts = {}
         legacy = {(entry['date'], entry['ticker']): entry for entry in entries}
@@ -214,15 +224,29 @@ class TradingMemoryLog:
     def _factual_context(self, ticker, *, n_same, n_cross, as_of):
         """门槛按全量可见样本统计，展示截断不影响n。"""
         entries=self._visible_facts(as_of)
-        same=[entry for entry in entries if entry['ticker']==ticker]
-        cross=[entry for entry in entries if entry['ticker']!=ticker]
+        def same_ticker(entry):
+            if self._fact_policy == 'w4-visible-v1' and not self._market_context:
+                return entry.get('analysis_symbol', entry['ticker']) == self.fact_aliases.get(ticker, ticker)
+            return entry['ticker'] == ticker
+        same=[entry for entry in entries if same_ticker(entry)]
+        cross=[entry for entry in entries if not same_ticker(entry)]
         parts=[]
         if same:
-            n=len(same)
+            new_policy = self._fact_policy == 'w4-visible-v1' and not self._market_context
+            counts = defaultdict(int)
+            for entry in same:
+                if entry.get('c2_5'):
+                    counts[entry['sources']['5']['metric']] += 1
+            n=max(counts.values(), default=0) if new_policy else len(same)
             parts.append(f'{ticker}历史事实：样本 {n} 条，'+('不足以形成规律，仅供参考' if n<self._lesson_min else '历史记录仅供参考'))
             table=['|日期|PM评级|5日主收益|10日主收益|20日主收益|口径|','|---|---|---|---|---|---|']
             for entry in reversed(same[-n_same:] if n_same else []):
                 values=[f"{entry['returns'][day]:+.2%}" if day in entry['returns'] else '未成熟/不可得' for day in ('5','10','20')]
+                if entry.get('different_winners'):
+                    for i, day in enumerate(('5', '10', '20')):
+                        source = entry['sources'].get(day)
+                        if source:
+                            values[i] += f"（{source['date']} / {source['rating']} / {source['run_id']}\\|{source['ticker']}）"
                 table.append('|'+ '|'.join([entry['date'], entry['rating'], *values, entry['basis']])+'|')
             parts.append('\n'.join(table))
             if any(entry.get('reflection_association','').startswith('反思关联不可得') for entry in same):
@@ -230,12 +254,14 @@ class TradingMemoryLog:
             if n>=self._lesson_min:
                 directional=[]
                 for entry in same:
+                    if new_policy and (not entry.get('c2_5') or counts[entry['sources']['5']['metric']] < self._lesson_min):
+                        continue
                     value=entry['returns'].get('5')
                     sign=1 if entry['rating'] in ('Buy','Overweight') else -1 if entry['rating'] in ('Underweight','Sell') else 0
                     if value is not None and sign:
                         directional.append(value*sign>0)
                 parts.append(f'方向命中率（可用5日主口径；Hold不计）：{sum(directional)/len(directional):.1%}，n={len(directional)}' if directional else '方向命中率：没有可用方向样本')
-                reflections=[entry for entry in same if entry.get('reflection')][-3:]
+                reflections=[entry for entry in same if entry.get('reflection') and (not new_policy or (entry.get('c2_5') and counts[entry['sources']['5']['metric']] >= self._lesson_min))][-3:]
                 parts.extend(f"[{entry['date']} | {entry['ticker']}]\nREFLECTION:\n{entry['reflection']}" for entry in reversed(reflections))
         if self._cross_lessons=='text':
             legacy_cross=[entry for entry in self.load_entries() if not entry.get('pending') and entry['ticker'] != ticker and (as_of is None or self._known_by(entry.get('resolved'), as_of))]
@@ -253,6 +279,8 @@ class TradingMemoryLog:
             for (rating,basis),values in sorted(groups.items()):
                 table.append(f'|{rating}|{basis}|{sum(values)/len(values):+.2%}|{len(values)}|')
             parts.append('\n'.join(table))
+        if self.fact_audit:
+            parts.insert(0, '未来事实政策 w4-visible-v1；as_of=' + str(as_of) + '；输入SHA256=' + self.fact_audit['outcomes_sha256'] + '/' + self.fact_audit['memory_sha256'] + '；逐窗n=' + str({w: a['n'] for w, a in self.fact_audit['windows'].items()}))
         return '\n\n'.join(parts)
 
 

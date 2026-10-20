@@ -66,6 +66,9 @@ def get_news(ticker: str, start_date: str, end_date: str) -> str:
     market_tz = ZoneInfo(config.get("market_timezone") or "America/New_York")
     start = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=market_tz)
     end = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=market_tz) + timedelta(days=1)
+    from .bounded_news import enabled, read
+    if enabled(config):
+        return read(ticker, start, end, config, get_shared_client())
     return _read(
         f"{ticker} Alpaca news", [ticker], start, end, config.get("news_article_limit", 20)
     )

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import json
 import re
+from contextlib import nullcontext
 from tradingagents.dataflows.config import get_config
 
 
@@ -57,8 +58,16 @@ def refresh_news(state, stage, config=None):
     update = {'news_last_fetched_at':stamp}
     try:
         from tradingagents.agents.tools import get_news
-        response = get_news.invoke({'ticker':state['company_of_interest'], 'start_date':state['trade_date'],
-                                    'end_date':state['trade_date'], 'trade_date':state['trade_date']}, config=config)
+        from tradingagents.dataflows.vendors.alpaca.bounded_news import enabled, stage_context
+        bounded = enabled(settings)
+        with stage_context(stage, previous, started) if bounded else nullcontext():
+            response = get_news.invoke({'ticker':state['company_of_interest'], 'start_date':state['trade_date'],
+                                        'end_date':state['trade_date'], 'trade_date':state['trade_date']}, config=config)
+        if bounded:
+            from tradingagents.dataflows.vendors.alpaca.bounded_news import audit_for
+            audit = audit_for(settings.get('_daily_run_id'), settings.get('_analysis_symbol') or state['company_of_interest'])
+            if (audit or {}).get('stages', {}).get(stage, {}).get('coverage_status') == 'failed':
+                raise RuntimeError('有界补抓失败，保留原水位')
         finished = current_time()
         existing = list(state.get('late_news', []))
         urls = {row['url'] for row in existing if row.get('url')}
@@ -68,7 +77,7 @@ def refresh_news(state, stage, config=None):
         for row in rows:
             published = parse_time(row['published_at'])
             title = row['title'].casefold()
-            if not published or not previous < published <= finished: continue
+            if not published or not (previous < published < started if bounded else previous < published <= finished): continue
             if title in titles or (row['url'] and row['url'] in urls): continue
             fresh.append({**row, 'stage':stage, 'fetched_at':finished.isoformat()})
             titles.add(title)
