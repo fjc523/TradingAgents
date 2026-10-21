@@ -110,7 +110,7 @@ def test_actual_graph_setup_binds_each_role_and_structured_side_both_phases(monk
     for name,role in factories.items():monkeypatch.setattr(setup,name,factory(role))
     monkeypatch.setattr(setup,'create_market_analyst',factory('market'))
     phases=[]
-    def turn(llm,side,phase):phases.append((llm,side,phase));return lambda state:{}
+    def turn(llm,side,phase,config=None):phases.append((llm,side,phase));return lambda state:{}
     monkeypatch.setattr(structured,'create_research_turn',turn)
     graph=setup.GraphSetup(quick,deep,ConditionalLogic(),20,config={'debate_mode':mode,'legacy_speaker_rotation':True,'trade_date':'2026-10-01'},role_llms=models).setup_graph(['market'])
     assert all(seen[role] is models[role] for role in ROLES) and seen['market'] is quick
