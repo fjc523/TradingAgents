@@ -774,8 +774,29 @@ def decision_schema(base, config, layer):
     """每项关闭恢复旧字段；不顺带关闭其他功能。"""
     original=_SCHEMA_BASES.get(base,base)
     model = _extended_decision_schema(original,config.get('price_plan_evaluation_enabled',True),config.get('rating_probability_fields',True),layer,config.get('rating_timing_decoupled',True),config.get('price_plan_legs',True))
+    from tradingagents.agents.rating import evidence_policy
+    evidence_policy(config)
+    model = _evidence_decision_schema(model, config.get('rating_evidence_policy', 'legacy'))
     market = config.get('market_context')
     return _market_decision_schema(model, market['quote_currency'], market['benchmark_symbol']) if market else model
+
+
+@lru_cache(maxsize=128)
+def _evidence_decision_schema(base, policy):
+    """按基类和显式版本隔离字段元数据及既有腿合同。"""
+    if policy == 'legacy':
+        return base
+    from copy import deepcopy
+    fields = {}
+    for name, field in base.model_fields.items():
+        info = deepcopy(field)
+        if name == 'direction_change' and info.description == '必填“否”或“是：具体新证据”，列late news/新增数据或审阅人新事实的来源及方向影响；盈亏比、入场点或笼统风险不构成变更依据。':
+            info.description = '必填“否”或“是：具体新证据”，方向变更仅指相对研究经理recommendation；列研究经理未考虑且符合共享合格证据规则的late news/新增数据或审阅人新事实的来源及方向影响；新增数据不含回看<20日的价格/技术/VIX变化，环境标签变化也不构成新增方向证据；盈亏比、入场点或笼统风险不构成变更依据。'
+        fields[name] = (field.annotation, info)
+    model = create_model(base.__name__ + 'AntiChaseV1', __base__=base, **fields)
+    if base in _LEG_DECISION_MODELS:
+        _LEG_DECISION_MODELS.add(model)
+    return model
 
 
 @lru_cache(maxsize=64)

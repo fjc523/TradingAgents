@@ -91,6 +91,14 @@ Write these sections, in this order, starting with the recommendation on its own
 {allocation_instruction(config)}
 {NO_EXTERNAL_TOOLS}""" + get_language_instruction(labelled=True)
 
+        if config.get('rating_evidence_policy') == 'anti-chase-v1':
+            recent = state.get('recent_decisions_context')
+            if recent is None:
+                raise ValueError('新政策缺最近决策冻结输入')
+            marker = '**历史教训：**\n' + (state.get('past_context', '') or '无已结算教训')
+            prompt = prompt.replace(marker, marker + '\n\n**同标的最近三次已发布决策（可含未结算，仅作跨日比较）**：\n' + recent, 1)
+            prompt += '\n无历史时仍使用固定前缀并写“无可见历史，按当前证据独立判断”；既有rationale仍限600字；' + '历史评级不是约束。先依据本轮可见事实独立判断；有新事实必须更新。理由固定以“相对上次已发布决策：”标出评级相同/变化、新事实或≥20日趋势证据、来源/日期/数值及方向影响。改变评级须有合格新证据，或可核对的纠错：若上次评级的决定性依据只是短期信号，本轮可按当前合格证据重评，并写明“上次评级依据为短期信号，按合格证据纠正”。legacy切换期同样允许纠错，不要求≥20日趋势刚刚变化。旧消息重复、回看<20日的价格/技术/VIX及标签变化不等于新增方向证据，不能为保持一致而锚定。'
+
         if structured_debate:
             prompt = prompt.replace('starting with the recommendation on its own line:', 'starting with 3–5 evidence-based cruxes, then the recommendation:')
             prompt += '\n先输出3–5个分歧点裁决（cruxes），每项列多方主张、空方主张、决定性报告证据、胜方/未决及理由，再输出评级。不得凭发言顺序判胜负。'

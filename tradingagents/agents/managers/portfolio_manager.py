@@ -138,6 +138,8 @@ Write these sections, in this order, starting with the rating on its own line:
         # Read back from text, a rating the thesis quotes could replace it.
         if config.get("rating_probability_fields", True):
             prompt += "\n输出可选prob_outperform_5d、prob_outperform_20d（0–1）与expected_return_20d_range，每项单列；给出评级必须给0–1概率数值，证据薄弱向0.5收缩；只有关键输入缺失且连评级都不能给时才写不可得及原因。"
+        if config.get('rating_evidence_policy') == 'anti-chase-v1':
+            prompt = prompt.replace('默认沿用研究经理recommendation，不能以交易员改后评级或审阅意见多数替代研究判断。只有研究经理未考虑的新信息才可改变方向：late news补抓、新增数据或审阅人列出的可核对新事实，须注明来源、事实及方向影响。盈亏比、入场点不足和笼统“风险较高”不是依据。', '默认沿用研究经理recommendation，方向变更仅指相对该recommendation，不能以交易员改后评级或审阅意见多数替代研究判断。只有研究经理未考虑、且符合共享合格证据规则的新信息才可改变方向：late news补抓、新增数据或审阅人列出的可核对新事实，须注明来源、事实及方向影响；新增数据不含回看<20日的价格/技术/VIX变化，环境标签变化也不构成新增方向证据。盈亏比、入场点不足和笼统“风险较高”不是依据。')
         if config.get('price_plan_legs', True):
             prompt = prompt.replace('输出可选prob_outperform_', '输出prob_outperform_')
             # price_plan_instruction已含完整腿规则，此处只移除旧首句模板。

@@ -46,6 +46,17 @@ RATING_DEFINITIONS = """五档评级定义（未来5–20交易日的方向及�
 观点有分歧本身不是选择Hold的理由；权衡证据后仍均衡或证据不足才使用Hold。""" + '\n' + RATING_TIMING_INSTRUCTION
 
 
+RATING_EVIDENCE_INSTRUCTION = '评级仍表达未来5–20个交易日的方向及主口径收益。回看期<20个交易日的任何价格、量能、技术指标（含1–5日涨跌、单日量价、盘前涨跌、10日均线、MACD、RSI、布林、短均线交叉）、VIX五日变化及环境标签变化仅用于执行时机和风险提示；单项或这些同源短期信号的组合，不得单独触发评级变化、把prob_outperform_20d推过评级档位边界，或把目标配置推出当前评级区间，prob_outperform_5d可以反映执行时机。改变方向（研究经理：相对上次已发布决策；交易员/PM：相对研究经理recommendation）须指出新增可核对事实（如财报兑现、宏观数据超预期）或至少20个交易日的趋势证据及其变化，说明来源、数值及对未来主口径收益的影响；不能借20日概率越档或目标配置跨区间绕过方向证据规则。20日概率每轮按当前证据独立评估，不得照抄上次概率；未越档的概率调整不额外要求新事实。区间内配置定位、点位腿（含风险减配）与止损规则照现有规则执行，不受本条约束，不将风险减配腿的减后配置误当方向目标配置跨区间。评级须由合格证据支持；若上次已发布评级的决定性依据只是短期信号，研究经理本轮可按当前合格证据重评，并写明“上次评级依据为短期信号，按合格证据纠正”，不要求20日趋势也刚刚发生变化。不得把短期价格变化改称“新事实”，也不得因MACD参数含26或单日站上/跌破20日均线就声称已有20日趋势。长期证据不是必然正确；有新事实必须更新，不能为维持旧评级忽略反证。'
+
+
+def evidence_policy(config):
+    """显式版本仅作用于本图，未知版本拒绝。"""
+    policy = config.get('rating_evidence_policy', 'legacy')
+    if policy not in ('legacy', 'anti-chase-v1'):
+        raise ValueError('未知rating_evidence_policy：' + str(policy))
+    return policy == 'anti-chase-v1'
+
+
 def rating_definitions(config=None):
     """按图私有配置选定义，不改变五档枚举和解析口径。"""
     if config is None:
@@ -60,6 +71,8 @@ def rating_definitions(config=None):
     if config.get('rating_probability_fields', True):
         from tradingagents.agents.market_contract import instruction_template
         text += '\n' + instruction_template(PROBABILITY_INSTRUCTION, config)
+    if evidence_policy(config):
+        text += '\n' + RATING_EVIDENCE_INSTRUCTION
     from tradingagents.agents.market_contract import market_instruction
     return text + market_instruction(config)
 

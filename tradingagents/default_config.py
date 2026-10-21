@@ -90,6 +90,8 @@ def build_default_config() -> dict:
     the environment as it is now.
     """
     return _apply_env_overrides({
+        "rating_evidence_policy": "legacy",
+        "rating_evidence_effective_at": None,
         "earnings_expectations_enabled": True,
         "sentiment_min_social_posts": 3,
         "lesson_min_settled_same_ticker": 10,

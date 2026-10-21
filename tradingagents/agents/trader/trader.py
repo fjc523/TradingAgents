@@ -97,7 +97,7 @@ def create_trader(llm, config=None):
         if direction_lock:
             messages[0]['content'] = messages[0]['content'].replace(
                 '输出五档动作，与研究经理不同须说明原因；观点有分歧本身不是Hold的理由。 ',
-                '默认沿用研究经理recommendation。只有研究经理未考虑的可核对新证据才允许改变方向；不能凭盈亏比、入场点不足或笼统风险改变。 ')
+                ('默认沿用研究经理recommendation，方向变更仅指相对该recommendation。只有研究经理未考虑、且符合共享合格证据规则的可核对新证据才允许改变方向，须注明来源、事实及方向影响；新增数据不含回看<20日的价格/技术/VIX变化，环境标签变化也不构成新增方向证据。不能凭盈亏比、入场点不足或笼统风险改变。 ' if config.get('rating_evidence_policy') == 'anti-chase-v1' else '默认沿用研究经理recommendation。只有研究经理未考虑的可核对新证据才允许改变方向；不能凭盈亏比、入场点不足或笼统风险改变。 '))
             messages[1]['content'] += '\n- **方向变更**：direction_change必填“否”或“是：具体新证据”，包含来源、事实及方向影响。'
 
         if config.get("price_plan_evaluation_enabled", True):
