@@ -93,3 +93,27 @@ def test_shared_rule_keeps_execution_and_correction_exceptions():
         assert part in text
     with pytest.raises(ValueError, match='未知'):
         rating_definitions({'rating_evidence_policy': 'unknown'})
+
+
+@pytest.mark.parametrize('order', [('legacy', 'anti-chase-v1', 'legacy'), ('anti-chase-v1', 'legacy', 'anti-chase-v1')])
+@pytest.mark.parametrize('name,layer', [('ResearchPlan','rm'),('CruxResearchPlan','rm'),('EvidenceResearchPlan','rm'),('LegacyResearchPlan','rm'),('PortfolioDecision','pm')])
+def test_us_policy_derivation_keeps_actual_probability_generation_order(order,name,layer):
+    from tradingagents.agents import schemas
+    from tradingagents.llm_clients.codex_exec.schemas import schema_for
+    base=getattr(schemas,name)
+    original={key:deepcopy(field) for key,field in base.model_fields.items()}
+    schemas._evidence_decision_schema.cache_clear()
+    models=[decision_schema(base,{'rating_evidence_policy':policy},layer) for policy in order]
+    assert models[0] is models[2] and models[0] is not models[1]
+    legacy=next(model for policy,model in zip(order,models) if policy=='legacy')
+    for policy,model in zip(order,models):
+        assert list(model.model_fields)==list(legacy.model_fields)
+        for properties in (model.model_fields, model.model_json_schema()['properties'],schema_for(model)['properties']):
+            names=list(properties);rating='recommendation' if layer=='rm' else 'rating'
+            assert names[names.index(rating)-3:names.index(rating)]==['prob_outperform_5d','prob_outperform_20d','expected_return_20d_range']
+            for key in ('cruxes','evidence_check'):
+                if key in names:assert names.index(key)<names.index('prob_outperform_5d')
+        if policy!='legacy':
+            assert all(model.model_fields[key] is not legacy.model_fields[key] for key in legacy.model_fields)
+    assert list(base.model_fields)==list(original)
+    assert {key:field.description for key,field in base.model_fields.items()}=={key:field.description for key,field in original.items()}

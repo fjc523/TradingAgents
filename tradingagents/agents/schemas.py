@@ -794,6 +794,9 @@ def _evidence_decision_schema(base, policy):
             info.description = '必填“否”或“是：具体新证据”，方向变更仅指相对研究经理recommendation；列研究经理未考虑且符合共享合格证据规则的late news/新增数据或审阅人新事实的来源及方向影响；新增数据不含回看<20日的价格/技术/VIX变化，环境标签变化也不构成新增方向证据；盈亏比、入场点或笼统风险不构成变更依据。'
         fields[name] = (field.annotation, info)
     model = create_model(base.__name__ + 'AntiChaseV1', __base__=base, **fields)
+    # 继承重建会恢复祖先字段顺序；沿用扩展基类的概率先评级契约。
+    model.__pydantic_fields__ = {name: model.model_fields[name] for name in base.model_fields}
+    model.model_rebuild(force=True)
     if base in _LEG_DECISION_MODELS:
         _LEG_DECISION_MODELS.add(model)
     return model
