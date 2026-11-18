@@ -107,6 +107,12 @@ def normalize_sec_user_agent(value: str | None) -> str | None:
     if match is None:
         return None
     local, domain = (part.lower() for part in match.groups())
+    if (len(local) > 64 or local.startswith('.') or local.endswith('.') or '..' in local
+            or len(domain) > 253 or any(
+                not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label)
+                for label in domain.split('.')
+            )):
+        return None
     if (local == 'your' and domain == 'email.com' or
             domain.rsplit('.', 1)[-1] in {'example', 'invalid', 'localhost', 'test'} or
             any(domain == item or domain.endswith('.' + item) for item in ('example.com', 'example.net', 'example.org'))):

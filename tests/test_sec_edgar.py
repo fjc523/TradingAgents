@@ -229,7 +229,8 @@ def test_a_period_reported_under_two_tags_takes_the_preferred_one_not_both():
 
 @pytest.mark.unit
 @pytest.mark.parametrize('agent', [None, '', 'invalid', 'Your Name your@email.com',
-                                  'TradingAgents (contact@example.com)', 'name@placeholder.invalid'])
+                                  'TradingAgents (contact@example.com)', 'name@placeholder.invalid',
+                                  'Offline fixture data@-invalid.edu', 'Offline fixture data..audit@fixture-research.edu'])
 def test_missing_or_placeholder_contact_skips_network(monkeypatch, agent):
     if agent is None:
         monkeypatch.delenv('SEC_EDGAR_USER_AGENT', raising=False)
