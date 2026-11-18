@@ -100,10 +100,36 @@ _ANNUAL_FORMS = ("10-K", "20-F", "40-F")
 def normalize_sec_user_agent(value: str | None) -> str | None:
     """接受可作为 HTTP 请求头的联系地址，排除示例与保留域名。"""
     value = (value or '').strip()
-    if not value.isascii() or not value.isprintable():
+    if not value or not value.isascii() or not value.isprintable():
         return None
-    match = re.search(r"(?<![\w@])([a-z0-9.!#$%&'*+/=?^_`{|}~-]+)@([a-z0-9.-]+\.[a-z]{2,})(?![\w@.-])",
-                      value, re.IGNORECASE)
+
+    brackets = {'(': ')', '<': '>'}
+    closing = []
+    for char in value:
+        if char in brackets:
+            closing.append(brackets[char])
+        elif char in ')>' and (not closing or char != closing.pop()):
+            return None
+    if closing:
+        return None
+
+    contact = value
+    prefix = ''
+    if contact.endswith(')'):
+        prefix, separator, contact = contact[:-1].rpartition('(')
+        if not separator:
+            return None
+        contact = contact.strip()
+    if contact.endswith('>'):
+        label, separator, address = contact[:-1].rpartition('<')
+        if not separator:
+            return None
+    else:
+        label, _, address = contact.rpartition(' ')
+    if '@' in prefix or '@' in label:
+        return None
+    match = re.fullmatch(r"([a-z0-9.!#$%&'*+/=?^_`{|}~-]+)@([a-z0-9.-]+\.[a-z]{2,})",
+                         address.strip(), re.IGNORECASE)
     if match is None:
         return None
     local, domain = (part.lower() for part in match.groups())
