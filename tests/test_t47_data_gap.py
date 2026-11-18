@@ -129,6 +129,7 @@ def test_success_cooldown_not_capped(clock,monkeypatch):
 
 
 def test_instance_selection_cache_and_dimension_units(tmp_path,monkeypatch):
+    monkeypatch.setenv('SEC_EDGAR_USER_AGENT', 'SEC fixture contact@fixture-research.edu')
     monkeypatch.setattr(sec,'get_config',lambda:{'data_cache_dir':str(tmp_path)})
     monkeypatch.setattr(sec,'_fetch_json',lambda *a:{'directory':{'item':[{'name':'FilingSummary.xml'},{'name':'test_cal.xml'},{'name':'test.xml'}]}})
     calls=[]

@@ -287,11 +287,7 @@ Other companies' statements come from Yahoo Finance, which dates a statement by 
 
 Insider trades are dated by when they happened, not when they were filed, so a run dated in the past is told they are withheld as well.
 
-SEC asks callers to identify themselves and refuses requests that carry no contact address, so a default one is sent. Set your own so SEC can reach you rather than the project:
-
-```bash
-SEC_EDGAR_USER_AGENT="Your Name your@email.com"
-```
+通过 `SEC_EDGAR_USER_AGENT` 提供 SEC 能联系到的 ASCII 姓名或机构名及真实邮箱。未配置有效联系人时跳过 SEC 网络请求，并尝试已配置的后备供应商。集成的分析批次优先使用进程环境变量，其次使用项目的 `config/secrets.env`。Alpaca、SEC EDGAR 和 Yahoo 的 TLS 诊断只保留已知异常类型、可用的安全错误码、环境代理匹配标志及 CA 来源。
 
 It covers companies that file with the SEC, including foreign companies listed in the US. Anything else, such as Hong Kong or A-share listings, falls through to the next vendor in the chain. EDGAR's machine-readable filings begin in 2009, and a fourth quarter is reported as unavailable rather than derived, because filers publish it only inside the annual figure.
 

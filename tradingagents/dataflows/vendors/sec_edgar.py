@@ -22,17 +22,19 @@ import copy
 import xml.etree.ElementTree as ET
 import logging
 import os
+import re
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import requests
 
-from tradingagents import __version__
 from tradingagents.dataflows.config import get_config
-from tradingagents.dataflows.errors import NoMarketDataError, VendorUnavailableError, StaleVendorDataError
+from tradingagents.dataflows.errors import (NoMarketDataError, StaleVendorDataError,
+                                            VendorNotConfiguredError, VendorUnavailableError)
 from tradingagents.dataflows.statement_freshness import StatementResult
 from tradingagents.dataflows.files import replace_file
+from tradingagents.dataflows.tls_diagnostics import tls_diagnostic
 
 logger = logging.getLogger(__name__)
 
@@ -95,34 +97,47 @@ _YEAR_TO_DATE = ((150, 200, 6), (240, 290, 9))
 _ANNUAL_FORMS = ("10-K", "20-F", "40-F")
 
 
+def normalize_sec_user_agent(value: str | None) -> str | None:
+    """接受可作为 HTTP 请求头的联系地址，排除示例与保留域名。"""
+    value = (value or '').strip()
+    if not value.isascii() or not value.isprintable():
+        return None
+    match = re.search(r"(?<![\w@])([a-z0-9.!#$%&'*+/=?^_`{|}~-]+)@([a-z0-9.-]+\.[a-z]{2,})(?![\w@.-])",
+                      value, re.IGNORECASE)
+    if match is None:
+        return None
+    local, domain = (part.lower() for part in match.groups())
+    if (local == 'your' and domain == 'email.com' or
+            domain.rsplit('.', 1)[-1] in {'example', 'invalid', 'localhost', 'test'} or
+            any(domain == item or domain.endswith('.' + item) for item in ('example.com', 'example.net', 'example.org'))):
+        return None
+    return value
+
+
 def _user_agent() -> str:
-    """Who SEC sees. No account or key exists; callers identify themselves.
-
-    www.sec.gov, which serves the ticker map, refuses a User-Agent carrying no
-    contact address: a client name alone or with a project URL gets 403, one
-    with an address gets 200. So the default carries a placeholder address and
-    the package version. Set SEC_EDGAR_USER_AGENT to your own name and address
-    so SEC can reach you about your traffic rather than the project.
-    """
-    configured = os.getenv("SEC_EDGAR_USER_AGENT", "").strip()
-    return configured or f"TradingAgents/{__version__} (contact@example.com)"
-
-
+    configured = normalize_sec_user_agent(os.getenv('SEC_EDGAR_USER_AGENT'))
+    if configured is None:
+        raise VendorNotConfiguredError('SEC EDGAR 未配置有效联系人；请设置 SEC_EDGAR_USER_AGENT')
+    return configured
 
 
 def _fetch_json(url: str) -> dict:
     """Read a public EDGAR document, respecting SEC's identification rule."""
+    headers = {"User-Agent": _user_agent()}
     try:
-        response = requests.get(url, headers={"User-Agent": _user_agent()}, timeout=30)
+        response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as exc:
         status = getattr(getattr(exc, "response", None), "status_code", None)
         # Every failure here is "this vendor cannot serve it now", so the router
         # moves on instead of seeing a transport exception it has no rule for.
-        raise VendorUnavailableError(f"SEC EDGAR request failed ({status or type(exc).__name__})") from exc
+        tls = tls_diagnostic(exc, url=url)
+        if tls is None:
+            raise VendorUnavailableError(f"SEC EDGAR request failed ({status or type(exc).__name__})") from exc
     except ValueError as exc:
         raise VendorUnavailableError("SEC EDGAR returned an unreadable response") from exc
+    raise VendorUnavailableError(f"SEC EDGAR 请求失败：{tls}")
 
 
 def _cached_json(url: str, name: str) -> dict:
@@ -277,13 +292,21 @@ def _filing_facts(cik, accession, filing_date, form):
         names.sort(key=lambda name: not name.endswith('_htm.xml'))
         payload = None
         for name in names:
+            url = base + name
+            tls = None
             try:
-                response = requests.get(base + name, headers={'User-Agent': _user_agent()}, timeout=30)
+                response = requests.get(url, headers={'User-Agent': _user_agent()}, timeout=30)
                 response.raise_for_status()
                 candidate = response.content
                 root = ET.fromstring(candidate)
             except (requests.RequestException, ET.ParseError) as exc:
-                raise VendorUnavailableError('SEC原申报实例获取或解析失败') from exc
+                tls = tls_diagnostic(exc, url=url)
+                if tls is None:
+                    raise VendorUnavailableError('SEC原申报实例获取或解析失败') from exc
+            if tls:
+                # 报表后备可吸收原实例失败，仍保留这一条脱敏诊断。
+                logger.warning('SEC原申报实例获取失败：%s', tls)
+                raise VendorUnavailableError(f'SEC原申报实例获取失败：{tls}')
             if root.tag == '{http://www.xbrl.org/2003/instance}xbrl':
                 payload = candidate
                 break
@@ -391,7 +414,7 @@ def _statement(kind: str, ticker: str, freq: str, as_of_date: str, title: str) -
     filing, unavailable = None, None
     try:
         filing = latest_periodic_filing(cik, as_of_date) if quarterly else _latest_filing(cik, as_of_date, ('10-K',))
-    except VendorUnavailableError as exc:
+    except (VendorUnavailableError, VendorNotConfiguredError) as exc:
         unavailable = str(exc)
     expected = filing['reportDate'] if filing else None
     if filing:

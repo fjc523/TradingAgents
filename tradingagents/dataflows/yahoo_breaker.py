@@ -6,6 +6,7 @@ import threading
 from urllib.parse import parse_qsl, unquote, urlsplit, urlunsplit
 from uuid import uuid4
 from tradingagents.dataflows.errors import VendorUnavailableError
+from tradingagents.dataflows.tls_diagnostics import tls_diagnostic
 
 _lock = threading.Lock()
 _reason = None
@@ -67,6 +68,8 @@ def trip_yahoo_breaker(reason, *, diagnostic=None):
             _first_trigger = {'event_id':uuid4().hex,'kind':'first_breaker_trigger',
                 'recorded_at':datetime.now(timezone.utc).isoformat(),'reason':_reason,
                 **{key:(diagnostic or {}).get(key, _reason if key=='error' else 'UNKNOWN' if key=='method' else None) for key in ('method','url','error','symbol')}}
+            if (diagnostic or {}).get('tls'):
+                _first_trigger['tls'] = diagnostic['tls']
             created = True
         first = deepcopy(_first_trigger)
     # 文件IO和观察者可能重入；不能持熔断锁通知。顺序指首次成功trip，不指物理网络先后。
@@ -84,17 +87,26 @@ def check_yahoo_breaker():
         report_vendor('yahoo_breaker', 'yfinance', 'failed', error='批次熔断，跳过请求', provider_health=first)
         error = VendorUnavailableError(f'Yahoo已熔断：{reason}')
         error.provider_health_event_id = first['event_id'] if first else None
+        error.yahoo_tls_details = first.get('tls') if first else None
         raise error
 
 
+def yahoo_tls_details(error):
+    return _chain_value(error, 'yahoo_tls_details')
+
+
 def provider_health_event_id(error):
+    return _chain_value(error, 'provider_health_event_id')
+
+
+def _chain_value(error, field):
     """沿原异常链取首事件引用，不改变异常传播或补造请求。"""
     seen = set()
     while error is not None and id(error) not in seen:
         seen.add(id(error))
-        identity = getattr(error, 'provider_health_event_id', None)
-        if identity:
-            return identity
+        value = getattr(error, field, None)
+        if value:
+            return value
         error = error.__cause__ or error.__context__
     return None
 
@@ -110,21 +122,42 @@ def ensure_bounded_session():
     with _lock:
         if _session is None:
             from curl_cffi.requests import Session
+            from curl_cffi.requests.exceptions import CertificateVerifyError, SSLError
             from yfinance.data import YfData
             class BoundedSession(Session):
+                def _safe_request(self, *args, **kwargs):
+                    try:
+                        return super().request(*args, **kwargs)
+                    except Exception as exc:
+                        url = kwargs.get('url') or (args[1] if len(args) > 1 else None)
+                        detail = tls_diagnostic(exc, url=url, backend='curl', session=self,
+                                                verify=kwargs.get('verify'))
+                        if detail is None:
+                            raise
+                        error_type = CertificateVerifyError if isinstance(exc, CertificateVerifyError) else SSLError
+                        code = getattr(exc, 'code', 0)
+                        error = error_type(detail, code=code if type(code) is int else 0)
+                        error.yahoo_tls_details = detail
+                    # 脱敏后再进入观察者与 yfinance，避免记录 TLS 异常原文或 traceback。
+                    raise error
+
                 def request(self, *args, **kwargs):
                     check_yahoo_breaker()
                     requested = kwargs.get('timeout')
                     kwargs['timeout'] = min(requested, 10) if isinstance(requested, (int, float)) else 10
                     try:
                         from tradingagents.dataflows.vendor_observer import observed_call
-                        response = observed_call('yahoo_request', 'yfinance', super().request, *args, **kwargs)
+                        response = observed_call('yahoo_request', 'yfinance', self._safe_request, *args, **kwargs)
                         if response.status_code == 429:
                             trip_yahoo_breaker('HTTP 429', diagnostic=_transport_diagnostic(args, kwargs, 'HTTP 429'))
                         return response
                     except Exception as exc:
                         if is_connection_failure(exc):
-                            first = trip_yahoo_breaker(type(exc).__name__, diagnostic=_transport_diagnostic(args, kwargs, type(exc).__name__+'：'+str(exc)))
+                            detail = yahoo_tls_details(exc)
+                            diagnostic = _transport_diagnostic(args, kwargs, detail or type(exc).__name__+'：'+str(exc))
+                            if detail:
+                                diagnostic['tls'] = detail
+                            first = trip_yahoo_breaker(type(exc).__name__, diagnostic=diagnostic)
                             exc.provider_health_event_id = first['event_id']
                         raise
             _session = BoundedSession(impersonate='chrome')

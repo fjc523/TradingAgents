@@ -14,6 +14,7 @@ import requests
 
 from tradingagents.dataflows.config import get_config
 from tradingagents.dataflows.errors import VendorNotConfiguredError, VendorUnavailableError
+from tradingagents.dataflows.tls_diagnostics import tls_diagnostic
 
 _DATA_URL = "https://data.alpaca.markets"
 logger = logging.getLogger(__name__)
@@ -83,6 +84,7 @@ class AlpacaClient:
 
     def _get(self, url: str, params: dict[str, Any], *, timeout=20, retries=3, request_limiter=None) -> dict[str, Any]:
         headers = self.headers
+        tls_error = None
         for attempt in range(retries + 1):
             self._limiter.acquire()
             if request_limiter is not None:
@@ -92,6 +94,10 @@ class AlpacaClient:
             except requests.RequestException as exc:
                 if timeout == 10 and attempt < retries:
                     continue
+                tls = tls_diagnostic(exc, url=url, session=self.session)
+                if tls:
+                    tls_error = VendorUnavailableError(f"Alpaca 请求失败：{tls}")
+                    break
                 raise VendorUnavailableError(f"Alpaca 请求失败：{type(exc).__name__}") from exc
             remaining = response.headers.get("X-Ratelimit-Remaining")
             try:
@@ -115,12 +121,18 @@ class AlpacaClient:
             except (requests.RequestException, ValueError) as exc:
                 if timeout == 10 and attempt < retries:
                     continue
+                tls = tls_diagnostic(exc, url=url, session=self.session)
+                if tls:
+                    tls_error = VendorUnavailableError(f"Alpaca HTTP {response.status_code}：{tls}")
+                    break
                 raise VendorUnavailableError(
                     f"Alpaca HTTP {response.status_code}：{type(exc).__name__}"
                 ) from exc
             if not isinstance(body, dict):
                 raise VendorUnavailableError("Alpaca 返回值不是 JSON 对象")
             return body
+        if tls_error is not None:
+            raise tls_error
         raise VendorUnavailableError("Alpaca 请求重试已耗尽")
 
     def get_bars(

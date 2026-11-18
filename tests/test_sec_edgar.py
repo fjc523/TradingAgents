@@ -13,7 +13,7 @@ from unittest import mock
 
 import pytest
 
-from tradingagents.dataflows.errors import NoMarketDataError
+from tradingagents.dataflows.errors import NoMarketDataError, VendorNotConfiguredError
 from tradingagents.dataflows.vendors import sec_edgar
 
 _REAL_FETCH = sec_edgar._fetch_json
@@ -54,6 +54,7 @@ FACTS = {
 
 @pytest.fixture(autouse=True)
 def _no_network_or_cache(tmp_path, monkeypatch):
+    monkeypatch.setenv("SEC_EDGAR_USER_AGENT", "EDGAR fixture contact@fixture-research.edu")
     monkeypatch.setattr(sec_edgar, "get_config", lambda: {"data_cache_dir": str(tmp_path)})
     # 旧陈述测试的submissions明确可用但无新增申报；不得把companyfacts误作submissions。
     original_cached = sec_edgar._cached_json
@@ -133,14 +134,16 @@ def test_company_facts_are_fetched_once_per_company_not_once_per_date(tmp_path, 
 
 
 @pytest.mark.unit
-def test_it_works_unconfigured_and_takes_the_caller_s_own_contact(monkeypatch):
-    """SEC returns 403 for a User-Agent with no contact address, so the default
-    carries one; a caller who sets their own replaces it."""
-    monkeypatch.delenv("SEC_EDGAR_USER_AGENT", raising=False)
-    assert "@" in sec_edgar._user_agent()
-
-    monkeypatch.setenv("SEC_EDGAR_USER_AGENT", "MyDesk research@example.com")
-    assert sec_edgar._user_agent() == "MyDesk research@example.com"
+def test_real_contact_passed_to_sec(monkeypatch):
+    agent = 'Offline fixture data@fixture-research.edu'
+    monkeypatch.setenv('SEC_EDGAR_USER_AGENT', agent)
+    response = mock.Mock()
+    response.json.return_value = {'offline': True}
+    get = mock.Mock(return_value=response)
+    monkeypatch.setattr(sec_edgar.requests, 'get', get)
+    url = 'https://data.sec.gov/test-data'
+    assert _REAL_FETCH(url) == {'offline': True}
+    get.assert_called_once_with(url, headers={'User-Agent': agent}, timeout=30)
 
 
 @pytest.mark.unit
@@ -225,12 +228,18 @@ def test_a_period_reported_under_two_tags_takes_the_preferred_one_not_both():
 
 
 @pytest.mark.unit
-def test_the_default_identification_names_the_package_version(monkeypatch):
-    """SEC asks automated clients to identify themselves; a release names its own version."""
-    import tradingagents
-
-    monkeypatch.delenv("SEC_EDGAR_USER_AGENT", raising=False)
-    assert sec_edgar._user_agent() == f"TradingAgents/{tradingagents.__version__} (contact@example.com)"
+@pytest.mark.parametrize('agent', [None, '', 'invalid', 'Your Name your@email.com',
+                                  'TradingAgents (contact@example.com)', 'name@placeholder.invalid'])
+def test_missing_or_placeholder_contact_skips_network(monkeypatch, agent):
+    if agent is None:
+        monkeypatch.delenv('SEC_EDGAR_USER_AGENT', raising=False)
+    else:
+        monkeypatch.setenv('SEC_EDGAR_USER_AGENT', agent)
+    get = mock.Mock(side_effect=AssertionError('示例联系人不能发出网络请求'))
+    monkeypatch.setattr(sec_edgar.requests, 'get', get)
+    with pytest.raises(VendorNotConfiguredError, match='SEC_EDGAR_USER_AGENT'):
+        _REAL_FETCH('https://data.sec.gov/test-data')
+    get.assert_not_called()
 
 
 @pytest.mark.unit
