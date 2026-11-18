@@ -115,7 +115,8 @@ def normalize_sec_user_agent(value: str | None) -> str | None:
 
     contact = value
     prefix = ''
-    if contact.endswith(')'):
+    parenthesized = contact.endswith(')')
+    if parenthesized:
         prefix, separator, contact = contact[:-1].rpartition('(')
         if not separator:
             return None
@@ -124,6 +125,8 @@ def normalize_sec_user_agent(value: str | None) -> str | None:
         label, separator, address = contact[:-1].rpartition('<')
         if not separator:
             return None
+    elif parenthesized:
+        label, address = '', contact
     else:
         label, _, address = contact.rpartition(' ')
     if '@' in prefix or '@' in label:

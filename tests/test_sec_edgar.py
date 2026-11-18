@@ -137,6 +137,7 @@ def test_company_facts_are_fetched_once_per_company_not_once_per_date(tmp_path, 
 @pytest.mark.parametrize('agent', [
     'Offline fixture data@fixture-research.edu',
     'Offline fixture (data@fixture-research.edu)',
+    'Offline fixture ( data@fixture-research.edu )',
     'Offline fixture <data@fixture-research.edu>',
     'Fixture/1.0 (Offline Research <data@fixture-research.edu>)',
     'Offline, Inc. (Research Desk) < data@fixture-research.edu >',
@@ -240,7 +241,9 @@ def test_a_period_reported_under_two_tags_takes_the_preferred_one_not_both():
                                   'Offline fixture first,last@fixture-research.edu',
                                   'Offline fixture data@fixture-research.edu/invalid',
                                   'Offline fixture < data@fixture-research.edu',
-                                  'Offline fixture ( data@fixture-research.edu'])
+                                  'Offline fixture ( data@fixture-research.edu',
+                                  'Offline fixture (first, last@fixture-research.edu)',
+                                  'Offline fixture (, last@fixture-research.edu)'])
 def test_missing_or_placeholder_contact_skips_network(monkeypatch, agent):
     if agent is None:
         monkeypatch.delenv('SEC_EDGAR_USER_AGENT', raising=False)
